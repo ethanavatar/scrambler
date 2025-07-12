@@ -1,16 +1,12 @@
 const std = @import("std");
-const utilities = @import("utilities.zig");
-const model = @import("cubies.zig");
-const moves = @import("moves.zig");
+const permutations = @import("permutations.zig");
+
+pub const checker = "R2 L2 F2 B2 U2 D2";
+pub const tPerm   = "R U R' U' R' F R2 U' R' U' R U R' F'";
 
 pub fn main() !void {
-    var cube: model.CubieCube = moves.solved;
-    cube.move(.Right, 2);
-    cube.move(.Left,  2);
-    cube.move(.Front, 2);
-    cube.move(.Back,  2);
-    cube.move(.Up,    2);
-    cube.move(.Down,  2);
+    var cube = permutations.solved;
+    cube.algorithmString(tPerm);
 
     std.debug.print("{}", .{ cube });
 }

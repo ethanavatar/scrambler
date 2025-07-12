@@ -1,13 +1,16 @@
 const std = @import("std");
 const cubies = @import("cubies.zig");
 
+const ansiBlack = "\x1b[0;39;48;2;0;0;0m";
+const ansiReset = "\x1b[0m";
+
 const ansi: [6][]const u8 = .{
-    "\x1b[0;30;48;2;255;255;255m  \x1b[0m", // white
-    "\x1b[0;30;48;2;255;125;0m  \x1b[0m",  // orange
-    "\x1b[0;30;48;2;0;255;0m  \x1b[0m",    // green
-    "\x1b[0;30;48;2;255;0;0m  \x1b[0m",    // red
-    "\x1b[0;30;48;2;0;0;255m  \x1b[0m",    // blue
-    "\x1b[0;30;48;2;255;255;0m  \x1b[0m",  // yellow
+    "\x1b[0;30;48;2;255;255;255m  " ++ ansiReset, // white
+    "\x1b[0;30;48;2;255;125;0m  "   ++ ansiReset, // orange
+    "\x1b[0;30;48;2;0;255;0m  "     ++ ansiReset, // green
+    "\x1b[0;30;48;2;255;0;0m  "     ++ ansiReset, // red
+    "\x1b[0;30;48;2;0;0;255m  "     ++ ansiReset, // blue
+    "\x1b[0;30;48;2;255;255;0m  "   ++ ansiReset, // yellow
 };
 
 const Color = enum(u8) {
@@ -64,6 +67,8 @@ pub const FaceletCube = struct {
         const ec: [24]Color = self.edgeColors;
         const cc: [24]Color = self.cornerColors;
 
+        //try writer.print("{s}\n", .{ ansiBlack });
+
         try writer.print("{s: ^6} {s}{s}{s}\n", .{ "", cc[0], ec[0],   cc[1] });
         try writer.print("{s: ^6} {s}{s}{s}\n", .{ "", ec[3], ansi[0], ec[1] });
         try writer.print("{s: ^6} {s}{s}{s}\n", .{ "", cc[3], ec[2],   cc[2] });
@@ -71,12 +76,14 @@ pub const FaceletCube = struct {
         const f = "{s}{s}{s} {s}{s}{s} {s}{s}{s} {s}{s}{s}\n";
 
         try writer.print(f, .{ cc[4], ec[4],   cc[5],  cc[8],  ec[8],   cc[9],   cc[12], ec[12],  cc[13],  cc[16], ec[16],  cc[17] });
-        try writer.print(f, .{ ec[7], ansi[1], ec[5],  ec[11], ansi[2], ec[9],   ec[15], ansi[3], ec[13],  ec[19], ansi[4], ec[17], });
-        try writer.print(f, .{ cc[7], ec[6],   cc[6],  cc[11], ec[10],  cc[10],  cc[15], ec[14],  cc[14],  cc[19], ec[18],  cc[18], });
+        try writer.print(f, .{ ec[7], ansi[1], ec[5],  ec[11], ansi[2], ec[9],   ec[15], ansi[3], ec[13],  ec[19], ansi[4], ec[17] });
+        try writer.print(f, .{ cc[7], ec[6],   cc[6],  cc[11], ec[10],  cc[10],  cc[15], ec[14],  cc[14],  cc[19], ec[18],  cc[18] });
 
         try writer.print("{s: ^6} {s}{s}{s}\n", .{ "", cc[20], ec[20],   cc[21] });
         try writer.print("{s: ^6} {s}{s}{s}\n", .{ "", ec[23], ansi[5],  ec[21] });
         try writer.print("{s: ^6} {s}{s}{s}\n", .{ "", cc[23], ec[22],   cc[22] });
+
+        //try writer.print("\n{s}", .{ ansiReset });
     }
 
 };

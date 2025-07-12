@@ -1,7 +1,12 @@
 const std = @import("std");
 const utilities = @import("utilities.zig");
 const facelets  = @import("facelets.zig");
-const moves     = @import("moves.zig");
+const permutations = @import("permutations.zig");
+
+pub const CubeMove = struct {
+    face:  permutations.CubeFace,
+    order: u8,
+};
 
 pub const Edge = enum(u8) {
     UB, UR, UF, UL,
@@ -15,24 +20,55 @@ pub const Corner = enum(u8) {
 };
 
 pub const CubieCube = struct {
-    edgePermutations:   [12]Edge  = utilities.initAcending([12]Edge),
-    cornerPermutations: [8]Corner = utilities.initAcending([8]Corner),
+    edgePermutations:   [12]Edge,
+    cornerPermutations: [8]Corner,
 
-    edgeOrientations:   [12]u8 = @splat(0),
-    cornerOrientations: [8]u8  = @splat(0),
+    edgeOrientations:   [12]u8,
+    cornerOrientations: [8]u8,
 
-    pub fn move(self: *CubieCube, face: moves.CubeFace, order: u8) void {
-        for (0..order) |_| {
-            const permutation = switch (face) {
-                .Right => moves.rMove,
-                .Left  => moves.lMove,
-                .Up    => moves.uMove,
-                .Down  => moves.dMove,
-                .Front => moves.fMove,
-                .Back  => moves.bMove,
+    fn getTurnFromString(move: []const u8) CubeMove {
+        var order: u8 = 1;
+
+        if (move.len == 2) {
+            if (std.ascii.isDigit(move[1])) {
+                order = std.fmt.charToDigit(move[1], 10) catch unreachable;
+
+            } else if (move[1] == '\'') {
+                order = 3;
+
+            } else {
+                @panic("invalid move modifier");
+            }
+        }
+
+        const face: permutations.CubeFace = switch (std.ascii.toUpper(move[0])) {
+            'R' => .Right, 'L' => .Left,
+            'F' => .Front, 'B' => .Back,
+            'U' => .Up,    'D' => .Down,
+            else => @panic("invalid move"),
+        };
+
+        return .{
+            .face  = face,
+            .order = order,
+        };
+    }
+
+    pub fn algorithmString(self: *CubieCube, moves: []const u8) void {
+        var sequence = std.mem.splitSequence(u8, moves, " ");
+        while (sequence.next()) |move| {
+            self.turn(getTurnFromString(move));
+        }
+    }
+
+    pub fn turn(self: *CubieCube, cubeTurn: CubeMove) void {
+        for (0..cubeTurn.order) |_| {
+            var newState: CubieCube = permutations.solved; 
+            const permutation = switch (cubeTurn.face) {
+                .Right => permutations.rMove, .Left  => permutations.lMove,
+                .Up    => permutations.uMove, .Down  => permutations.dMove,
+                .Front => permutations.fMove, .Back  => permutations.bMove,
             };
-
-            var newState: CubieCube = moves.solved; 
 
             for (0..12) |i| {
                 const perm = @intFromEnum(permutation.edgePermutations[i]);

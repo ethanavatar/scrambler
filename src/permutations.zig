@@ -1,4 +1,5 @@
-const cubies = @import("cubies.zig");
+const cubies    = @import("cubies.zig");
+const utilities = @import("utilities.zig");
 
 pub const CubeFace = enum(u8) {
     Right, Left,
@@ -16,7 +17,13 @@ fn changeCorner(cube: *cubies.CubieCube, position: cubies.Corner, newPiece: cubi
     cube.cornerOrientations[@intFromEnum(position)] = newOrientation;
 }
 
-pub const solved: cubies.CubieCube = .{ };
+pub const solved: cubies.CubieCube = .{
+    .edgePermutations   = utilities.initAcending([12]cubies.Edge),
+    .cornerPermutations = utilities.initAcending([8]cubies.Corner),
+
+    .edgeOrientations   = @splat(0),
+    .cornerOrientations = @splat(0),
+};
 
 pub const rMove: cubies.CubieCube = ret: {
     var c: cubies.CubieCube = solved;
