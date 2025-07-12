@@ -1,10 +1,17 @@
 
 pub fn initAcending(comptime T: type) T {
     const T_Info = @typeInfo(T);
+    const T_Child_Info = @typeInfo(T_Info.array.child);
 
-    var v: [T_Info.array.len]u8 = @splat(0);
-    for (0..T_Info.array.len) |i| {
-        v[i] = i;
+    var v: [T_Info.array.len]T_Info.array.child = undefined;
+
+    inline for (0..T_Info.array.len) |i| {
+        if (T_Child_Info == .@"enum") {
+            v[i] = @enumFromInt(i);
+
+        } else {
+            v[i] = i;
+        }
     }
 
     return v;

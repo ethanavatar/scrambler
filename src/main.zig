@@ -1,17 +1,16 @@
 const std = @import("std");
 const utilities = @import("utilities.zig");
-const model = @import("cube_model.zig");
+const model = @import("cubies.zig");
+const moves = @import("moves.zig");
 
 pub fn main() !void {
-    var cube: model.CubeState = .{ };
-
-    const sexy   = "R U R' U'";
-    const sledge = "R' F R F'";
-    const sexySledge = utilities.join_strings(" ", .{ sexy, sledge });
-    _ = sexySledge;
-
-    const tPerm = "R U R' U' R' F R2 U' R' U' R U R' F'";
-    cube.algorithm_string(tPerm);
+    var cube: model.CubieCube = moves.solved;
+    cube.move(.Right, 2);
+    cube.move(.Left,  2);
+    cube.move(.Front, 2);
+    cube.move(.Back,  2);
+    cube.move(.Up,    2);
+    cube.move(.Down,  2);
 
     std.debug.print("{}", .{ cube });
 }
