@@ -1,8 +1,19 @@
 
+pub fn initAcending(comptime T: type) T {
+    const T_Info = @typeInfo(T);
+
+    var v: [T_Info.array.len]u8 = @splat(0);
+    for (0..T_Info.array.len) |i| {
+        v[i] = i;
+    }
+
+    return v;
+}
 
 pub fn join_strings(comptime sep: []const u8, comptime args: anytype) []const u8 {
     const args_T = @TypeOf(args);
     const args_T_info = @typeInfo(args_T);
+
     if (args_T_info != .@"struct") {
         @compileError("expected tuple or struct, found " ++ @typeName(args_T));
     }
@@ -20,3 +31,4 @@ pub fn join_strings(comptime sep: []const u8, comptime args: anytype) []const u8
 
     return res;
 }
+

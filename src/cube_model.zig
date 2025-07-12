@@ -1,4 +1,5 @@
 const std = @import("std");
+const utilities = @import("utilities.zig");
 
 pub const CubeFace = enum(u8) {
     Right, Left,
@@ -11,17 +12,16 @@ pub const CubeMove = struct {
     order: enum(u8) { Single = 1, Double = 2, Prime = 3 } = .Single,
 };
 
-fn initStickers() [24]u8 {
-    var stickers: [24]u8 = @splat(0);
-    for (0..24) |i| {
-        stickers[i] = i;
-    }
-    return stickers;
-}
-
 pub const CubeState = struct {
-    edges:   [24]u8 = initStickers(),
-    corners: [24]u8 = initStickers(),
+
+    //edgePieces: [12]u8 = utilities.initAcending([12]u8),
+    //edgeOrientations: [12]u8 = @splat(0),
+
+    //cornerPieces: [8]u8 = utilities.initAcending([8]u8),
+    //cornerOrientations: [12]u8 = @splat(true),
+
+    edges:   [24]u8 = utilities.initAcending([24]u8),
+    corners: [24]u8 = utilities.initAcending([24]u8),
 
     pub fn algorithm(self: *CubeState, moves: []CubeMove) void {
         for (moves) |move| {
