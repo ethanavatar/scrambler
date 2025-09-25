@@ -7,7 +7,7 @@ pub const CubeFace = enum(u8) {
     Up,    Down,
 };
 
-fn changeEdge(cube: *cubies.CubieCube, position: cubies.Edge, newPiece: cubies.Edge, newOrientation: u8) void {
+pub fn changeEdge(cube: *cubies.CubieCube, position: cubies.Edge, newPiece: cubies.Edge, newOrientation: u8) void {
     cube.edgePermutations[@intFromEnum(position)] = newPiece;
     cube.edgeOrientations[@intFromEnum(position)] = newOrientation;
 }
