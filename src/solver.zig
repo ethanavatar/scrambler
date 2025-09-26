@@ -21,10 +21,10 @@ const g1Moves = [_]cubies.CubeMove{
     .{ .face = .Back,  .order = 2 },
 };
 
-fn binomialCoefficient(n: u64, k_in: u64) u64 {
-    if (k_in > n) {
-        return 0;
-    }
+fn binomialCoefficient(n: u64, k_in: u64) error{InvalidK}!u64 {
+    if (n == 0)    return 0;
+    if (k_in == 0) return 1;
+    if (k_in > n)  return 0;
 
     const k = if (k_in < n - k_in) k_in else n - k_in;
 
@@ -37,12 +37,26 @@ fn binomialCoefficient(n: u64, k_in: u64) u64 {
     return result;
 }
 
+test {
+    _ = binomialCoefficient(1, 2) catch |err| {
+        try std.testing.expect(err == error.InvalidK);
+    };
+    try std.testing.expect(try binomialCoefficient(1, 0) == 1);
+    try std.testing.expect(try binomialCoefficient(1, 1) == 1);
+    try std.testing.expect(try binomialCoefficient(2, 0) == 1);
+    try std.testing.expect(try binomialCoefficient(2, 1) == 2);
+    try std.testing.expect(try binomialCoefficient(2, 2) == 1);
+    try std.testing.expect(try binomialCoefficient(2, 2) == 1);
+    try std.testing.expect(try binomialCoefficient(3, 0) == 1);
+    try std.testing.expect(try binomialCoefficient(3, 1) == 3);
+    try std.testing.expect(try binomialCoefficient(3, 3) == 1);
+}
+
 const Phase1Coordinate = struct {
     edgeOrientation:   u16,
     cornerOrientation: u16,
     slicePermutation:  u16,
 };
-
 
 fn encodeEdgeOrientation(cube: cubies.CubieCube) u16 {
     var flip: u16 = 0;
@@ -80,8 +94,16 @@ fn decodeEdgeOrientation(coord: u16) [12]u8 {
     return results;
 }
 
+const mitch = "D2 L2 F2 D U2 R2 U' R' F2 L' U F2 R B' L2 D' B2 L2 R2";
+
 test {
-    
+    var cube = permutations.solved;
+    cube.algorithmString(mitch);
+
+    const expectations = [12]u8{ 0, 1, 0, 1,   0, 0, 0, 0,   0, 0, 1, 1 };
+    try std.testing.expectEqual(expectations, cube.edgeOrientations);
+    try std.testing.expectEqual(expectations, decodeEdgeOrientation(encodeEdgeOrientation(cube)));
+    try std.testing.expectEqual(0b10000001010, encodeEdgeOrientation(cube));
 }
 
 fn encodeCornerOrientation(cube: cubies.CubieCube) u16 {
@@ -99,20 +121,124 @@ fn encodeCornerOrientation(cube: cubies.CubieCube) u16 {
     return twist;
 }
 
+fn decodeCornerOrientation(twist: u16) [8]u8 {
+    var coord = twist;
+    var results: [8]u8 = undefined;
+    var sum: usize = 0;
+
+    for (0..7) |i| {
+        const o: u8 = @intCast(coord % 3);
+        results[i] = o;
+        sum += o;
+        coord /= 3;
+    }
+
+    results[7] = @intCast((3 - (sum % 3)) % 3);
+    return results;
+}
+
+test {
+    var cube = permutations.solved;
+    cube.algorithmString(mitch);
+
+    const expectations = [8]u8{ 0, 2, 2, 1,   0, 1, 1, 2 };
+    try std.testing.expectEqual(expectations, cube.cornerOrientations);
+    try std.testing.expectEqual(expectations, decodeCornerOrientation(encodeCornerOrientation(cube))); 
+    try std.testing.expectEqual(0b001111111111, encodeCornerOrientation(cube)); // TODO: Base 3 converter
+}
+
+fn isSliceEdge(edge: cubies.Edge) bool {
+    return switch (edge) {
+        .RF, .LF, .RB, .LB => true,
+        else => false,
+    };
+}
+
+test {
+    try std.testing.expectEqual(true, isSliceEdge(.RF));
+    try std.testing.expectEqual(true, isSliceEdge(.LF));
+    try std.testing.expectEqual(true, isSliceEdge(.RB));
+    try std.testing.expectEqual(true, isSliceEdge(.LB));
+
+    try std.testing.expectEqual(false, isSliceEdge(.UB));
+    try std.testing.expectEqual(false, isSliceEdge(.DF));
+}
+
 fn encodeSlicePermutation(cube: cubies.CubieCube) u16 {
     var slice_permutation: u16 = 0;
 
     var count: u32 = 4;
-    for (cube.edgePermutations, 0..) |edge, edge_index| {
-        switch (edge) {
-            .RF, .LF, .RB, .LB => { count -= 1; },
-            else => { slice_permutation += @intCast(binomialCoefficient(edge_index, count)); },
+    
+    var i: isize = 11;
+    while (i >= 0): (i -= 1) {
+        const edge = cube.edgePermutations[@intCast(i)];
+        if (isSliceEdge(edge)) {
+            count -= 1;
+        } else {
+            slice_permutation += @intCast(binomialCoefficient(@intCast(i), count) catch unreachable);
         }
 
         if (count == 0) break;
     }
 
+    //for (cube.edgePermutations, 0..) |edge, edge_index| {
+    //    std.debug.print("i: {}, k: {}\n", .{ i, count });
+    //    switch (edge) {
+    //        .RF, .LF, .RB, .LB => { count -= 1; },
+    //        else => { slice_permutation += @intCast(binomialCoefficient(edge_index, count) catch unreachable); },
+    //    }
+
+    //    if (count == 0) break;
+    //}
+
     return slice_permutation;
+}
+
+fn decodeSlicePermutation(slice_coord: u16) [4]cubies.Edge {
+    var slices: [4]cubies.Edge = undefined;
+    var slices_index: usize = 0;
+
+    var coord = slice_coord;
+
+    var k: u32 = 4;
+
+    var i: isize = 11;
+    while (i >= 0): (i -= 1) {
+        const choice = binomialCoefficient(@intCast(i), k) catch unreachable;
+        if (coord >= choice) {
+            slices[slices_index] = @enumFromInt(i);
+            slices_index += 1;
+
+            coord -= @intCast(choice);
+
+            k -= 1;
+            if (k == 0) break;
+        }
+    }
+
+    //for (0..12) |i| {
+    //    if (k == 0) break;
+
+    //    const choice = binomialCoefficient(i,k) catch unreachable;
+    //    if (coord >= choice) {
+    //        slices[slices_index] = @intCast(i);
+    //        slices_index += 1;
+
+    //        coord -= @intCast(choice);
+    //        k -= 1;
+    //    }
+    //}
+
+    return slices;
+}
+
+test {
+    var cube = permutations.solved;
+    cube.algorithmString(mitch);
+
+    //const expectations = [4]cubies.Edge{ .UB, .DL, .LF, .LB };
+    try std.testing.expectEqual(269, encodeSlicePermutation(cube));
+    try std.testing.expectEqual(269, encodeSlicePermutation(decodeSlicePermutation(encodeSlicePermutation(cube))));
 }
 
 fn cubiesToPhase1Coordinate(cube: cubies.CubieCube) Phase1Coordinate {
@@ -130,13 +256,14 @@ pub fn generateEdgeOrientationMovesTable() void {
 
     for (0..2048) |flip_coord| {
         cube.edgeOrientations = decodeEdgeOrientation(@intCast(flip_coord));
+        std.debug.assert(cubiesToPhase1Coordinate(cube).edgeOrientation == flip_coord);
 
         for (allMoves, 0..) |move, move_index| {
             cube.turn(move);
             edgeOrientationMoves[flip_coord][move_index] = cubiesToPhase1Coordinate(cube).edgeOrientation;
 
             const inverse_order: u8 = switch (move.order) {
-                1 => 3, 2 => 1, 3 => 1,
+                1 => 3, 2 => 2, 3 => 1,
                 else => unreachable,
             };
 
@@ -156,22 +283,7 @@ pub fn generateCornerOrientationMovesTable() void {
     var cube = permutations.solved; 
 
     for (0..2187) |twist_coord| {
-
-        {
-            var coord = twist_coord;
-            var sum: usize = 0;
-
-            for (0..7) |i| {
-                const o: u8 = @intCast(coord % 3);
-                cube.cornerOrientations[i] = o;
-                sum += o;
-                coord /= 3;
-            }
-
-            cube.cornerOrientations[7] = @intCast((3 - (sum % 3)) % 3);
-
-        }
-
+        cube.cornerOrientations = decodeCornerOrientation(@intCast(twist_coord));
         std.debug.assert(cubiesToPhase1Coordinate(cube).cornerOrientation == twist_coord);
 
         for (allMoves, 0..) |move, move_index| {
@@ -179,10 +291,9 @@ pub fn generateCornerOrientationMovesTable() void {
 
             const coord = cubiesToPhase1Coordinate(cube).cornerOrientation;
             cornerOrientationMoves[twist_coord][move_index] = coord;
-            //std.debug.print("{}\n", .{ coord });
 
             const inverse_order: u8 = switch (move.order) {
-                1 => 3, 2 => 1, 3 => 1,
+                1 => 3, 2 => 2, 3 => 1,
                 else => unreachable,
             };
 
@@ -199,42 +310,24 @@ pub fn generateCornerOrientationMovesTable() void {
 var slicePermutationMoves: [495][allMoves.len]u16 = std.mem.zeroes([495][allMoves.len]u16);
 
 pub fn generateSlicePermutationMovesTable() void {
-    var cube = permutations.solved; 
-
     for (0..495) |slice_coord| {
-        {
-            var slices: [4]u8 = undefined;
-            var slices_index: usize = 0;
+        var cube = permutations.solved; 
+        const slices = decodeSlicePermutation(@intCast(slice_coord));
 
-            var coord = slice_coord;
-
-            var k: u32 = 4;
-
-            for (0..12) |i| {
-                if (k == 0) break;
-
-                const choice = binomialCoefficient(11 - i, k);
-                if (coord >= choice) {
-                    slices[slices_index] = @intCast(i);
-                    slices_index += 1;
-
-                    coord -= choice;
-                    k -= 1;
-                }
-            }
-
-            for (slices, [4]cubies.Edge{ .RF, .LF, .RB, .LB }) |destination, source| {
-                permutations.changeEdge(&cube, @enumFromInt(destination), source, 0);
-                permutations.changeEdge(&cube, source, @enumFromInt(destination), 0);
-            }
+        for (slices, [4]cubies.Edge{ .RF, .LF, .RB, .LB }) |destination, source| {
+            // TODO Test new orientation
+            permutations.changeEdge(&cube, destination, source, 0);
+            permutations.changeEdge(&cube, source, destination, 0);
         }
+
+        std.testing.expectEqual(encodeSlicePermutation(cube), slice_coord) catch unreachable;
 
         for (allMoves, 0..) |move, move_index| {
             cube.turn(move);
             slicePermutationMoves[slice_coord][move_index] = encodeSlicePermutation(cube);
 
             const inverse_order: u8 = switch (move.order) {
-                1 => 3, 2 => 1, 3 => 1,
+                1 => 3, 2 => 2, 3 => 1,
                 else => unreachable,
             };
 
@@ -397,17 +490,6 @@ fn isDominoReduced(cube: cubies.CubieCube) bool {
 test "R2 L2 F2 B2 is Domino" {
     var cube = permutations.solved;
     cube.algorithmString("R2 L2 F2 B2");
-
-    for (cube.edgeOrientations) |edge| {
-        std.debug.print("{?}", .{ edge });
-    }
-    std.debug.print("\n", .{ });
-
-    for (cube.cornerOrientations) |corner| {
-        std.debug.print("{?}", .{ corner });
-    }
-    std.debug.print("\n", .{ });
-
     try std.testing.expect(isDominoReduced(cube));
 }
 
@@ -432,7 +514,7 @@ test {
     try std.testing.expect(isDominoReduced(cube) == false);
 }
 
-const max_depth: usize = 0;
+const max_depth: usize = 999;
 
 const CubeWithMoves = struct {
     cube:  cubies.CubieCube,
