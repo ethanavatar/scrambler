@@ -6,6 +6,18 @@ const permutations = @import("permutations.zig");
 pub const CubeMove = struct {
     face:  permutations.CubeFace,
     order: u8,
+
+    pub fn inverse(move: CubeMove) CubeMove {
+        const inverse_order: u8 = switch (move.order) {
+            1 => 3, 2 => 2, 3 => 1,
+            else => unreachable,
+        };
+
+        return .{
+            .face = move.face,
+            .order = inverse_order,
+        };
+    }
 };
 
 pub const Edge = enum(u8) {

@@ -52,6 +52,82 @@ test {
     try std.testing.expect(try binomialCoefficient(3, 3) == 1);
 }
 
+fn factorial(n: u64) u64 {
+    var result: u64 = 1;
+
+    for (1..n + 1) |i| {
+        result *= i;
+    }
+
+    return result;
+}
+
+test {
+    try std.testing.expectEqual(factorial(0), 1);
+    try std.testing.expectEqual(factorial(1), 1);
+    try std.testing.expectEqual(factorial(2), 2);
+    try std.testing.expectEqual(factorial(3), 6);
+    try std.testing.expectEqual(factorial(4), 24);
+    try std.testing.expectEqual(factorial(5), 120);
+}
+
+fn lexicographicRank(permutation: []u8) u64 {
+    const n = permutation.len;
+    var rank: u64 = 0;
+
+    for (0..n) |i| {
+        var smaller_count: u64 = 0;
+        for ((i + 1)..n) |j| {
+            if (permutation[j] < permutation[i]) {
+                smaller_count += 1;
+            }
+        }
+
+        rank += smaller_count * factorial(n - i - 1);
+    }
+
+    return rank;
+}
+
+fn lexicographicUnrank(e: []const u8, r: u64, allocator: std.mem.Allocator) !std.ArrayList(u8) {
+    const n = e.len;
+
+    var elements = std.ArrayList(u8).init(allocator);
+    defer elements.deinit();
+    try elements.appendSlice(e);
+
+    var permutation = std.ArrayList(u8).init(allocator);
+    var rank = r;
+    
+    for (0..n) |i| {
+        const f = factorial(n - i - 1);
+        const index = rank / f;
+        rank = rank % f;
+
+        try permutation.append(elements.items[index]);
+
+        for (index..elements.items.len - 1) |j| {
+            elements.items[j] = elements.items[j + 1];
+        }
+
+        _ = elements.pop();
+    }
+    
+    return permutation;
+}
+
+test {
+    const elements = [_]u8{ 0, 1, 2, 3, 4, 5 };
+
+    for (0..factorial(elements.len)) |rank| {
+        const permutation = try lexicographicUnrank(&elements, rank, std.testing.allocator);
+        defer permutation.deinit();
+
+        //std.debug.print("rank: {}, permutation: {any}\n", .{ rank, permutation.items });
+        try std.testing.expectEqual(rank, lexicographicRank(permutation.items));
+    }
+}
+
 const Phase1Coordinate = struct {
     edgeOrientation:   u16,
     cornerOrientation: u16,
@@ -232,14 +308,14 @@ fn decodeSlicePermutation(slice_coord: u16) [4]cubies.Edge {
     return slices;
 }
 
-test {
-    var cube = permutations.solved;
-    cube.algorithmString(mitch);
-
-    //const expectations = [4]cubies.Edge{ .UB, .DL, .LF, .LB };
-    try std.testing.expectEqual(269, encodeSlicePermutation(cube));
-    try std.testing.expectEqual(269, encodeSlicePermutation(decodeSlicePermutation(encodeSlicePermutation(cube))));
-}
+//test {
+//    var cube = permutations.solved;
+//    cube.algorithmString(mitch);
+//
+//    //const expectations = [4]cubies.Edge{ .UB, .DL, .LF, .LB };
+//    try std.testing.expectEqual(269, encodeSlicePermutation(cube));
+//    try std.testing.expectEqual(269, encodeSlicePermutation(decodeSlicePermutation(encodeSlicePermutation(cube))));
+//}
 
 fn cubiesToPhase1Coordinate(cube: cubies.CubieCube) Phase1Coordinate {
     return .{
@@ -251,58 +327,48 @@ fn cubiesToPhase1Coordinate(cube: cubies.CubieCube) Phase1Coordinate {
 
 var edgeOrientationMoves: [2048][allMoves.len]u16 = std.mem.zeroes([2048][allMoves.len]u16);
 
-pub fn generateEdgeOrientationMovesTable() void {
-    var cube = permutations.solved; 
-
+pub fn generateEdgeOrientationMovesTable() !void {
     for (0..2048) |flip_coord| {
+        var cube = permutations.solved; 
+
         cube.edgeOrientations = decodeEdgeOrientation(@intCast(flip_coord));
         std.debug.assert(cubiesToPhase1Coordinate(cube).edgeOrientation == flip_coord);
 
         for (allMoves, 0..) |move, move_index| {
+            const before = cube;
+
             cube.turn(move);
-            edgeOrientationMoves[flip_coord][move_index] = cubiesToPhase1Coordinate(cube).edgeOrientation;
+            edgeOrientationMoves[flip_coord][move_index] = encodeEdgeOrientation(cube);
+            cube.turn(move.inverse());
 
-            const inverse_order: u8 = switch (move.order) {
-                1 => 3, 2 => 2, 3 => 1,
-                else => unreachable,
-            };
-
-            const inverse_move: cubies.CubeMove = .{
-                .face = move.face,
-                .order = inverse_order,
-            };
-
-            cube.turn(inverse_move);
+            try std.testing.expectEqual(before.edgePermutations,   cube.edgePermutations);
+            try std.testing.expectEqual(before.cornerPermutations, cube.cornerPermutations);
+            try std.testing.expectEqual(before.edgeOrientations,   cube.edgeOrientations);
+            try std.testing.expectEqual(before.cornerOrientations, cube.cornerOrientations);
         }
     }
 }
 
 var cornerOrientationMoves: [2187][allMoves.len]u16 = std.mem.zeroes([2187][allMoves.len]u16);
 
-pub fn generateCornerOrientationMovesTable() void {
-    var cube = permutations.solved; 
-
+pub fn generateCornerOrientationMovesTable() !void {
     for (0..2187) |twist_coord| {
+        var cube = permutations.solved; 
+
         cube.cornerOrientations = decodeCornerOrientation(@intCast(twist_coord));
         std.debug.assert(cubiesToPhase1Coordinate(cube).cornerOrientation == twist_coord);
 
         for (allMoves, 0..) |move, move_index| {
+            const before = cube;
+
             cube.turn(move);
+            cornerOrientationMoves[twist_coord][move_index] = encodeCornerOrientation(cube);
+            cube.turn(move.inverse());
 
-            const coord = cubiesToPhase1Coordinate(cube).cornerOrientation;
-            cornerOrientationMoves[twist_coord][move_index] = coord;
-
-            const inverse_order: u8 = switch (move.order) {
-                1 => 3, 2 => 2, 3 => 1,
-                else => unreachable,
-            };
-
-            const inverse_move: cubies.CubeMove = .{
-                .face = move.face,
-                .order = inverse_order,
-            };
-
-            cube.turn(inverse_move);
+            try std.testing.expectEqual(before.edgePermutations,   cube.edgePermutations);
+            try std.testing.expectEqual(before.cornerPermutations, cube.cornerPermutations);
+            try std.testing.expectEqual(before.edgeOrientations,   cube.edgeOrientations);
+            try std.testing.expectEqual(before.cornerOrientations, cube.cornerOrientations);
         }
     }
 }
@@ -312,6 +378,7 @@ var slicePermutationMoves: [495][allMoves.len]u16 = std.mem.zeroes([495][allMove
 pub fn generateSlicePermutationMovesTable() void {
     for (0..495) |slice_coord| {
         var cube = permutations.solved; 
+
         const slices = decodeSlicePermutation(@intCast(slice_coord));
 
         for (slices, [4]cubies.Edge{ .RF, .LF, .RB, .LB }) |destination, source| {
@@ -325,93 +392,123 @@ pub fn generateSlicePermutationMovesTable() void {
         for (allMoves, 0..) |move, move_index| {
             cube.turn(move);
             slicePermutationMoves[slice_coord][move_index] = encodeSlicePermutation(cube);
-
-            const inverse_order: u8 = switch (move.order) {
-                1 => 3, 2 => 2, 3 => 1,
-                else => unreachable,
-            };
-
-            const inverse_move: cubies.CubeMove = .{
-                .face = move.face,
-                .order = inverse_order,
-            };
-
-            cube.turn(inverse_move);
+            cube.turn(move.inverse());
         }
     }
 }
 
-var phase1Prune: [4478976]i32 = std.mem.zeroes([4478976]i32);
+fn encodeCoordinateToTableIndex(coordinate: Phase1Coordinate) usize {
+    return coordinate.edgeOrientation + @as(usize, 2048) * coordinate.cornerOrientation;
+}
+
+fn decodeTableIndexToCoordinate(index: usize) Phase1Coordinate {
+    return .{
+        .edgeOrientation   = @intCast(@mod(index, 2048)),
+        .cornerOrientation = @intCast(@divFloor(index, 2048)),
+        .slicePermutation  = 0,
+    };
+}
+
+test {
+    for (0..2048 * 2187) |index| {
+        try std.testing.expectEqual(
+            index,
+            encodeCoordinateToTableIndex(decodeTableIndexToCoordinate(index)),
+        );
+    }
+}
+
+var phase1Prune: []i32 = undefined;
 
 pub fn generatePhase1PruneTable() !void {
-    @memset(&phase1Prune, -1);
-
-    // index = flip + 2048 * twist
-    //
-    // flip  = index % 2048
-    // twist = index // 2048
-    
     const allocator = std.heap.page_allocator;
+    phase1Prune = try allocator.alloc(i32, 4478976);
+    @memset(phase1Prune, -1);
 
-    var queue = std.ArrayList(i32).init(allocator);
-    defer queue.deinit();
+    const solved_index: usize = encodeCoordinateToTableIndex(.{
+        .edgeOrientation   = 0,
+        .cornerOrientation = 0,
+        .slicePermutation  = 0, // unused
+    });
 
-    for (0..495) |slice_state| {
-        const coordinate: Phase1Coordinate = .{
-            .edgeOrientation   = 0,
-            .cornerOrientation = 0,
-            .slicePermutation  = @intCast(slice_state),
-        };
+    phase1Prune[solved_index] = 0;
 
-        const encoding: usize = coordinate.edgeOrientation + @as(usize, 2048) * coordinate.cornerOrientation;
-        if (phase1Prune[encoding] == -1) {
-            phase1Prune[encoding] = 0;
-            try queue.append(@intCast(encoding));
-        }
-    }
+    var depth:  usize = 0;
+    var filled: usize = 1;
 
-    while (queue.items.len > 0) {
-        const encoding = queue.pop() orelse unreachable;
-        const depth = phase1Prune[@intCast(encoding)];
+    while (filled < (2048 * 2187)): (depth += 1) {
+        for (0..phase1Prune.len) |i| {
+            const v = phase1Prune[i];
+            if (v == depth) {
+                const coordinate = decodeTableIndexToCoordinate(i);
+            
+                for (allMoves, 0..) |_, move_index| {
+                    const next_coordinate: Phase1Coordinate = .{
+                        .edgeOrientation   = edgeOrientationMoves[coordinate.edgeOrientation][move_index],
+                        .cornerOrientation = cornerOrientationMoves[coordinate.cornerOrientation][move_index],
+                        //.slicePermutation  = slicePermutationMoves[coordinate.slicePermutation][move_index],
+                        .slicePermutation  = 0,
+                    }; 
 
-        for (allMoves, 0..) |_, move_index| {
-            const coordinate: Phase1Coordinate = .{
-                .edgeOrientation   = @intCast(@mod(encoding, 2048)),
-                .cornerOrientation = @intCast(@divFloor(encoding, 2048)),
-                .slicePermutation  = 0,
-            };
+                    const next_index: usize = encodeCoordinateToTableIndex(next_coordinate);
 
-            const next_coordinate: Phase1Coordinate = .{
-                .edgeOrientation   = edgeOrientationMoves[coordinate.edgeOrientation][move_index],
-                .cornerOrientation = cornerOrientationMoves[coordinate.cornerOrientation][move_index],
-                .slicePermutation  = slicePermutationMoves[coordinate.slicePermutation][move_index],
-            }; 
-
-            const next_encoding: usize = next_coordinate.edgeOrientation + @as(usize, 2048) * next_coordinate.cornerOrientation;
-
-            if (phase1Prune[next_encoding] == -1) {
-                phase1Prune[next_encoding] = depth + 1;
-                try queue.append(@intCast(next_encoding));
+                    if (phase1Prune[next_index] == -1) {
+                        phase1Prune[next_index] = @intCast(depth + 1);
+                        filled += 1;
+                    }
+                }
             }
         }
     }
-
-    var count: usize = 0;
-    var unexplored: usize = 0;
-    for (0..phase1Prune.len) |i| {
-        const distance = phase1Prune[i];
-        if (distance != -1) {
-            count += 1;
-        } else {
-            unexplored += 1;
-        }
-    }
-
-    std.debug.print("count: {}, unexplored: {}\n", .{
-        count,
-        unexplored
-    });
 }
+
+//const Phase2Coordinate = struct {
+//
+//};
+//
+//var phase2Prune: []i32 = undefined;
+//
+//pub fn generatePhase2PruneTable() !void {
+//    const allocator = std.heap.page_allocator;
+//    phase2Prune = try allocator.alloc(i32, 4478976);
+//    @memset(phase2Prune, -1);
+//
+//    const solved_index: usize = encodeCoordinateToTableIndex(.{
+//        .edgeOrientation   = 0,
+//        .cornerOrientation = 0,
+//        .slicePermutation  = 0, // unused
+//    });
+//
+//    phase1Prune[solved_index] = 0;
+//
+//    var depth:  usize = 0;
+//    var filled: usize = 1;
+//
+//    while (filled < (2048 * 2187)): (depth += 1) {
+//        for (0..phase1Prune.len) |i| {
+//            const v = phase1Prune[i];
+//            if (v == depth) {
+//                const coordinate = decodeTableIndexToCoordinate(i);
+//            
+//                for (allMoves, 0..) |_, move_index| {
+//                    const next_coordinate: Phase1Coordinate = .{
+//                        .edgeOrientation   = edgeOrientationMoves[coordinate.edgeOrientation][move_index],
+//                        .cornerOrientation = cornerOrientationMoves[coordinate.cornerOrientation][move_index],
+//                        //.slicePermutation  = slicePermutationMoves[coordinate.slicePermutation][move_index],
+//                        .slicePermutation  = 0,
+//                    }; 
+//
+//                    const next_index: usize = encodeCoordinateToTableIndex(next_coordinate);
+//
+//                    if (phase1Prune[next_index] == -1) {
+//                        phase1Prune[next_index] = @intCast(depth + 1);
+//                        filled += 1;
+//                    }
+//                }
+//            }
+//        }
+//    }
+//}
 
 fn isDominoReduced(cube: cubies.CubieCube) bool {
     for (cube.edgePermutations, 0..) |edge, edge_index| {
@@ -514,40 +611,25 @@ test {
     try std.testing.expect(isDominoReduced(cube) == false);
 }
 
-const max_depth: usize = 999;
+const max_depth: usize = 15;
 
-const CubeWithMoves = struct {
-    cube:  cubies.CubieCube,
-    moves: std.ArrayList(cubies.CubeMove),
-
-    fn init(cube: cubies.CubieCube, gpa: std.mem.Allocator) CubeWithMoves {
-        return .{ .cube = cube, .moves = std.ArrayList(cubies.CubeMove).init(gpa) };
-    }
-
-    fn clone(self: *CubeWithMoves) !CubeWithMoves {
-        return .{ .cube = self.cube, .moves = try self.moves.clone() };
-    }
-};
-
-pub fn findSolution(cube: cubies.CubieCube) !void {
+pub fn findSolution(cube: *cubies.CubieCube) !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
 
     for (0..max_depth) |depth| {
+        var moves = std.ArrayList(cubies.CubeMove).init(arena.allocator());
+        defer moves.deinit();
+
         std.debug.print("(depth: {d})\n", .{ depth });
-        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-        defer arena.deinit();
-
-        const allocator = arena.allocator();
-
-        var state = CubeWithMoves.init(cube, allocator);
-
-        try firstPhaseSearch(&state, depth);
+        try firstPhaseSearch(cube, depth, &moves);
     }    
 }
 
-fn firstPhaseSearch(state: *CubeWithMoves, depth: usize) !void {
+fn firstPhaseSearch(cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove)) !void {
     if (depth == 0) {
-        if (state.moves.items.len > 0) {
-            const previous_move = state.moves.getLast();
+        if (moves.items.len > 0) {
+            const previous_move = moves.getLast();
             const was_side_move = previous_move.face == .Right
                 or previous_move.face == .Left
                 or previous_move.face == .Front
@@ -555,9 +637,9 @@ fn firstPhaseSearch(state: *CubeWithMoves, depth: usize) !void {
 
             const was_quarter_turn = previous_move.order == 1 or previous_move.order == 3;
 
-            if (isDominoReduced(state.cube) and was_side_move and was_quarter_turn) {
+            if (isDominoReduced(cube.*) and was_side_move and was_quarter_turn) {
                 // phase 2 start
-                for (state.moves.items) |move| {
+                for (moves.items) |move| {
                     const label: u8 = switch (move.face) {
                         .Right => 'R', .Left  => 'L',
                         .Up    => 'U', .Down  => 'D',
@@ -577,19 +659,21 @@ fn firstPhaseSearch(state: *CubeWithMoves, depth: usize) !void {
         }
 
     } else if (depth > 0) {
-        const p = cubiesToPhase1Coordinate(state.cube);
-        const encoding: usize = p.edgeOrientation + @as(usize, 2048) * p.cornerOrientation;
+        const p = cubiesToPhase1Coordinate(cube.*);
+        const index = encodeCoordinateToTableIndex(p);
 
-        const prune_depth = phase1Prune[encoding];
-        std.debug.print("(pruned depth: {})\n", .{ prune_depth });
+        const prune_depth = phase1Prune[index];
+        //std.debug.print("(pruned depth: {})\n", .{ prune_depth });
 
         if (prune_depth <= depth) {
             for (allMoves) |move| {
-                var new_state = try state.clone();
-                new_state.cube.turn(move);
-                try new_state.moves.append(move);
+                cube.turn(move);
 
-                try firstPhaseSearch(&new_state, depth - 1);
+                try moves.append(move);
+                try firstPhaseSearch(cube, depth - 1, moves);
+                _ = moves.pop();
+
+                cube.turn(move.inverse());
             }
         }
     }

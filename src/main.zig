@@ -10,12 +10,13 @@ pub fn main() !void {
     var cube = permutations.solved;
     cube.algorithmString("B2 F2 L2 U2 B2 D2 F2 U2 L B2 D F' L' D U B' U F' L2 F'");
 
-    solver.generateEdgeOrientationMovesTable();
-    solver.generateCornerOrientationMovesTable();
-    solver.generateSlicePermutationMovesTable();
+    try solver.generateEdgeOrientationMovesTable();
+    try solver.generateCornerOrientationMovesTable();
+    //solver.generateSlicePermutationMovesTable();
     try solver.generatePhase1PruneTable();
+    //try solver.generatePhase2PruneTable();
 
-    try solver.findSolution(cube);
+    try solver.findSolution(&cube);
 
     //std.debug.print("{}", .{ cube });
 }
