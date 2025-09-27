@@ -14,7 +14,10 @@ pub fn main() !void {
     try solver.generateCornerOrientationMovesTable();
     //solver.generateSlicePermutationMovesTable();
     try solver.generatePhase1PruneTable();
-    //try solver.generatePhase2PruneTable();
+
+    try solver.generateCornerPermutationMovesTable();
+    try solver.generateEdgePermutationMovesTable();
+    try solver.generatePhase2PruneTable();
 
     try solver.findSolution(&cube);
 
