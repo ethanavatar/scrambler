@@ -38,6 +38,22 @@ pub const CubieCube = struct {
     edgeOrientations:   [12]u8,
     cornerOrientations: [8]u8,
 
+    pub fn solved() CubieCube {
+        return .{
+            .edgePermutations   = utilities.initAcending([12]Edge),
+            .cornerPermutations = utilities.initAcending([8]Corner),
+
+            .edgeOrientations   = @splat(0),
+            .cornerOrientations = @splat(0),
+        };
+    }
+
+    pub fn initFromAlgorithmString(algorithm: []const u8) CubieCube {
+        var cube = CubieCube.solved();
+        cube.algorithmString(algorithm);
+        return cube;
+    }
+
     fn getTurnFromString(move: []const u8) CubeMove {
         var order: u8 = 1;
 
@@ -78,7 +94,7 @@ pub const CubieCube = struct {
 
     pub fn turn(self: *CubieCube, cubeTurn: CubeMove) void {
         for (0..cubeTurn.order) |_| {
-            var newState: CubieCube = permutations.solved;
+            var newState: CubieCube = CubieCube.solved();
             const permutation = switch (cubeTurn.face) {
                 .Right => permutations.rMove, .Left  => permutations.lMove,
                 .Up    => permutations.uMove, .Down  => permutations.dMove,

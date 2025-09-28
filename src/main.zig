@@ -1,10 +1,10 @@
 const std = @import("std");
+
 const permutations = @import("permutations.zig");
-
-pub const checker = "R2 L2 F2 B2 U2 D2";
-pub const tPerm   = "R U R' U' R' F R2 U' R' U' R U R' F'";
-
+const cubies = @import("cubies.zig");
 const solver = @import("solver.zig");
+
+const MoveTables = @import("MoveTables.zig");
 
 pub fn main() !void {
     const solutions = [_][]const u8{
@@ -24,27 +24,21 @@ pub fn main() !void {
 
     std.debug.print("Scramble: {s}\n", .{ scramble });
 
-    var cube = permutations.solved;
+    var cube = cubies.CubieCube.initFromAlgorithmString(scramble);
     cube.algorithmString(scramble);
 
     std.debug.print("{}\n", .{ cube });
 
     for (solutions, 0..) |solution, i| {
         std.debug.print("Solution {}: {s}\n", .{ i, solution });
-        cube = permutations.solved;
-        cube.algorithmString(scramble);
+        cube = cubies.CubieCube.initFromAlgorithmString(scramble);
         cube.algorithmString(solution);
         std.debug.print("{}\n", .{ cube });
     }
 
-
-    //try solver.generateEdgeOrientationMovesTable();
-    //try solver.generateCornerOrientationMovesTable();
+    try MoveTables.generateAll();
     ////solver.generateSlicePermutationMovesTable();
     //try solver.generatePhase1PruneTable();
-
-    //try solver.generateCornerPermutationMovesTable();
-    //try solver.generateEdgePermutationMovesTable();
     //try solver.generatePhase2PruneTable();
 
     //try solver.findSolution(&cube);
