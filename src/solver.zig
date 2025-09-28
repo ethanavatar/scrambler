@@ -4,7 +4,9 @@ const math = @import("math.zig");
 const algorithms = @import("algorithms.zig");
 const cubies = @import("cubies.zig");
 const permutations = @import("permutations.zig");
+
 const MoveTables = @import("MoveTables.zig");
+const PruneTables = @import("PruneTables.zig");
 
 pub const allMoves = [_]cubies.CubeMove{
     .{ .face = .Right, .order = 1 }, .{ .face = .Right, .order = 2 }, .{ .face = .Right, .order = 3 },
@@ -22,11 +24,6 @@ const g1Moves = [_]cubies.CubeMove{
     .{ .face = .Down,  .order = 1 }, .{ .face = .Down, .order = 2 }, .{ .face = .Down, .order = 3 },
     .{ .face = .Front, .order = 2 },
     .{ .face = .Back,  .order = 2 },
-};
-
-const Phase1Coordinate = struct {
-    edgeOrientation:   u16,
-    cornerOrientation: u16,
 };
 
 pub fn encodeEdgeOrientation(cube: cubies.CubieCube) u16 {
@@ -122,19 +119,11 @@ test {
     try std.testing.expectEqual(0b001111111111, encodeCornerOrientation(cube)); // TODO: Base 3 converter
 }
 
-
-fn cubiesToPhase1Coordinate(cube: cubies.CubieCube) Phase1Coordinate {
-    return .{
-        .edgeOrientation   = encodeEdgeOrientation(cube),
-        .cornerOrientation = encodeCornerOrientation(cube),
-    };
-}
-
-fn encodeCoordinateToTableIndex(coordinate: Phase1Coordinate) usize {
+pub fn encodeCoordinateToTableIndex(coordinate: CoordinateCube) ?usize {
     return coordinate.edgeOrientation + @as(usize, 2048) * coordinate.cornerOrientation;
 }
 
-fn decodeTableIndexToCoordinate(index: usize) Phase1Coordinate {
+pub fn decodeTableIndexToCoordinate(index: usize) ?CoordinateCube {
     return .{
         .edgeOrientation   = @intCast(@mod(index, 2048)),
         .cornerOrientation = @intCast(@divFloor(index, 2048)),
@@ -150,69 +139,42 @@ test {
     }
 }
 
-var phase1Prune: []i8 = undefined;
+pub const CoordinateCube = struct {
+    edgeOrientation:   u16 = 0,
+    edgePermutation:   u16 = 0,
+    cornerOrientation: u16 = 0,
+    cornerPermutation: u16 = 0,
 
-pub fn generatePhase1PruneTable() !void {
-    const allocator = std.heap.page_allocator;
-    phase1Prune = try allocator.alloc(i8, 4478976);
-    @memset(phase1Prune, -1);
-
-    const solved_index: usize = encodeCoordinateToTableIndex(.{
-        .edgeOrientation   = 0,
-        .cornerOrientation = 0,
-    });
-
-    phase1Prune[solved_index] = 0;
-
-    var depth:  usize = 0;
-    var filled: usize = 1;
-
-    while (filled < (2048 * 2187)): (depth += 1) {
-        for (0..phase1Prune.len) |i| {
-            const v = phase1Prune[i];
-            if (v == depth) {
-                const coordinate = decodeTableIndexToCoordinate(i);
-            
-                for (allMoves, 0..) |_, move_index| {
-                    const next_coordinate: Phase1Coordinate = .{
-                        .edgeOrientation   = MoveTables.edgeOrientation[coordinate.edgeOrientation][move_index],
-                        .cornerOrientation = MoveTables.cornerOrientation[coordinate.cornerOrientation][move_index],
-                    }; 
-
-                    const next_index: usize = encodeCoordinateToTableIndex(next_coordinate);
-
-                    if (phase1Prune[next_index] == -1) {
-                        phase1Prune[next_index] = @intCast(depth + 1);
-                        filled += 1;
-                    }
-                }
-            }
-        }
+    pub fn fromCubies(cubie_cube: cubies.CubieCube) CoordinateCube {
+        return .{
+            .edgeOrientation = encodeEdgeOrientation(cubie_cube),
+            .edgePermutation = encodeEdgePermutation(cubie_cube),
+            .cornerOrientation = encodeCornerOrientation(cubie_cube),
+            .cornerPermutation = encodeCornerPermutation(cubie_cube),
+        };
     }
-}
 
-const Phase2Coordinate = struct {
-    cornerPermutation: u16,
-    edgePermutation: u16,
+    pub fn move(self: *const CoordinateCube, move_index: usize) CoordinateCube {
+        return .{
+            .edgeOrientation = MoveTables.edgeOrientation[self.edgeOrientation][move_index],
+            .edgePermutation = MoveTables.edgePermutation[self.edgePermutation][move_index],
+            .cornerOrientation = MoveTables.cornerOrientation[self.cornerOrientation][move_index],
+            .cornerPermutation = MoveTables.cornerPermutation[self.cornerPermutation][move_index],
+        };
+    }
 };
 
-fn encodePhase2CoordToIndex(coordinate: Phase2Coordinate) ?usize {
-    if ((coordinate.cornerPermutation > 40320) or (coordinate.edgePermutation > 40320)) {
-        std.debug.print("Corner: {}, Edge: {}\n", .{ coordinate.cornerPermutation, coordinate.edgePermutation });
+pub fn encodePhase2CoordToIndex(cube: CoordinateCube) ?usize {
+    if ((cube.cornerPermutation > 40320) or (cube.edgePermutation > 40320)) {
+        std.debug.print("Corner: {}, Edge: {}\n", .{ cube.cornerPermutation, cube.edgePermutation });
         unreachable;
     }
 
-    //if ((coordinate.cornerPermutation % 2) != (coordinate.edgePermutation % 2)) {
-    //    std.debug.print("Parity mismatch\n", .{ });
-    //    std.debug.print("Corner: {}, Edge: {}\n", .{ coordinate.cornerPermutation, coordinate.edgePermutation });
-    //    return null;
-    //}
-
-    const valid_edge_rank = coordinate.edgePermutation / 2;
-    return coordinate.cornerPermutation * @as(usize, 20160) + valid_edge_rank;
+    const valid_edge_rank = cube.edgePermutation / 2;
+    return cube.cornerPermutation * @as(usize, 20160) + valid_edge_rank;
 }
 
-fn decodePhase2IndexToCoord(index: usize) ?Phase2Coordinate {
+pub fn decodePhase2IndexToCoord(index: usize) ?CoordinateCube {
     const corner_rank = index / 20160;
     const edge_rank = (index % 20160) * 2 + (corner_rank % 2);
 
@@ -223,7 +185,7 @@ fn decodePhase2IndexToCoord(index: usize) ?Phase2Coordinate {
 
     return .{
         .cornerPermutation = @intCast(corner_rank),
-        .edgePermutation = @intCast(edge_rank),
+        .edgePermutation   = @intCast(edge_rank),
     };
 }
 
@@ -312,52 +274,6 @@ pub fn decodeEdgePermutation(rank: u16, allocator: std.mem.Allocator) !cubies.Cu
     }
 
     return cube;
-}
-
-var phase2Prune: []i32 = undefined;
-
-pub fn generatePhase2PruneTable() !void {
-    const total_entries = 812851200;
-
-    const allocator = std.heap.page_allocator;
-    phase2Prune = try allocator.alloc(i32, total_entries);
-    @memset(phase2Prune, -1);
-
-    const solved_index: usize = encodePhase2CoordToIndex(.{
-        .cornerPermutation = 0,
-        .edgePermutation   = 0,
-    }) orelse unreachable;
-
-    phase2Prune[solved_index] = 0;
-
-    var depth:  usize = 0;
-    var filled: usize = 1;
-
-    while (filled < total_entries): (depth += 1) {
-        std.debug.print("depth = {}, filled = {}\r", .{ depth, filled });
-        for (0..phase2Prune.len) |i| {
-
-            const v = phase2Prune[i];
-            if (v == depth) {
-                const coordinate = decodePhase2IndexToCoord(i) orelse unreachable;
-            
-                for (allMoves, 0..) |_, move_index| {
-                    const next_coordinate: Phase2Coordinate = .{
-                        .cornerPermutation = MoveTables.cornerPermutation[coordinate.cornerPermutation][move_index],
-                        .edgePermutation   = MoveTables.edgePermutation[coordinate.edgePermutation][move_index],
-                    }; 
-
-                    const next_index_opt = encodePhase2CoordToIndex(next_coordinate);
-                    if (next_index_opt) |next_index| {
-                        if (phase2Prune[next_index] == -1) {
-                            phase2Prune[next_index] = @intCast(depth + 1);
-                            filled += 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 fn isSolved(cube: cubies.CubieCube) bool {
@@ -466,29 +382,41 @@ test {
     try std.testing.expect(isDominoReduced(cube) == false);
 }
 
-const max_depth: usize = 15;
-const max_solutions: usize = 10;
+const max_depth: usize = 99;
 
-var solutions: usize = 0;
+var max_solutions: usize = 0;
 
-pub fn findSolution(cube: *cubies.CubieCube) !void {
+pub fn findSolutions(
+    c: cubies.CubieCube, solutions_count: usize,
+    allocator: std.mem.Allocator,
+) !std.ArrayList([]cubies.CubeMove) {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
+    
+    max_solutions = solutions_count;
+
+    var cube = c;
+
+    var solutions = std.ArrayList([]cubies.CubeMove).init(allocator);
 
     for (0..max_depth) |depth| {
         var moves = std.ArrayList(cubies.CubeMove).init(arena.allocator());
         defer moves.deinit();
 
-        std.debug.print("(depth: {d})\n", .{ depth });
-        try firstPhaseSearch(cube, depth, &moves);
+        try firstPhaseSearch(&cube, depth, &moves, &solutions);
 
-        if (solutions >= max_solutions) {
+        if (solutions.items.len >= max_solutions) {
             break;
         }
-    }    
+    }
+
+    return solutions;
 }
 
-fn firstPhaseSearch(cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove)) !void {
+fn firstPhaseSearch(
+    cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove),
+    solutions: *std.ArrayList([]cubies.CubeMove)
+) !void {
     if (depth == 0) {
         if (moves.items.len > 0) {
             const previous_move = moves.getLast();
@@ -500,43 +428,26 @@ fn firstPhaseSearch(cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList
             const was_quarter_turn = previous_move.order == 1 or previous_move.order == 3;
 
             if (isDominoReduced(cube.*) and was_side_move and was_quarter_turn) {
-                // phase 2 start
-                //for (moves.items) |move| {
-                //    const label: u8 = switch (move.face) {
-                //        .Right => 'R', .Left  => 'L',
-                //        .Up    => 'U', .Down  => 'D',
-                //        .Front => 'F', .Back  => 'B',
-                //    };
-
-                //    const order: u8 = switch (move.order) {
-                //        1 => ' ', 2 => '2', 3 => '\'',
-                //        else => unreachable,
-                //    };
-
-                //    std.debug.print("{c}{c} ", .{ label, order });
-                //}
-
-                //std.debug.print("\n", .{ });
-                try secondPhaseStart(cube, depth, moves);
+                try secondPhaseStart(cube, depth, moves, solutions);
             }
         }
 
     } else if (depth > 0) {
-        const p = cubiesToPhase1Coordinate(cube.*);
-        const index = encodeCoordinateToTableIndex(p);
+        const p = CoordinateCube.fromCubies(cube.*);
+        const index = encodeCoordinateToTableIndex(p) orelse unreachable;
+        const prune_depth = PruneTables.phase1[index];
 
-        const prune_depth = phase1Prune[index];
         if (prune_depth <= depth) {
             for (allMoves) |move| {
                 cube.turn(move);
+                defer cube.turn(move.inverse());
 
                 try moves.append(move);
-                try firstPhaseSearch(cube, depth - 1, moves);
-                _ = moves.pop();
+                defer _ = moves.pop();
 
-                cube.turn(move.inverse());
+                try firstPhaseSearch(cube, depth - 1, moves, solutions);
 
-                if (solutions >= max_solutions) {
+                if (solutions.items.len >= max_solutions) {
                     break;
                 }
             }
@@ -544,61 +455,51 @@ fn firstPhaseSearch(cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList
     }
 }
 
-fn secondPhaseStart(cube: *cubies.CubieCube, current_depth: usize, moves: *std.ArrayList(cubies.CubeMove)) !void {
+fn secondPhaseStart(
+    cube: *cubies.CubieCube, current_depth: usize, moves: *std.ArrayList(cubies.CubeMove),
+    solutions: *std.ArrayList([]cubies.CubeMove)
+) !void {
     for (0..max_depth - current_depth) |depth| {
-        secondPhaseSearch(cube, depth, moves);
-        if (solutions >= max_solutions) {
+        secondPhaseSearch(cube, depth, moves, solutions);
+        if (solutions.items.len >= max_solutions) {
             break;
         }
     }
 }
 
-fn secondPhaseSearch(cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove)) void {
+fn secondPhaseSearch(
+    cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove),
+    solutions: *std.ArrayList([]cubies.CubeMove)
+) void {
     if (depth == 0) {
         if (moves.items.len > 0) {
-
             if (isSolved(cube.*)) {
-                std.debug.print("{}: ", .{ solutions });
+                const allocator = solutions.allocator;
 
-                for (moves.items) |move| {
-                    const label: u8 = switch (move.face) {
-                        .Right => 'R', .Left  => 'L',
-                        .Up    => 'U', .Down  => 'D',
-                        .Front => 'F', .Back  => 'B',
-                    };
+                // TODO: Use toOwnedSlice(Allocator) in zig 0.15
+                const solution = allocator.alloc(cubies.CubeMove, moves.items.len) catch unreachable;
+                std.mem.copyForwards(cubies.CubeMove, solution, moves.items);
 
-                    const order: u8 = switch (move.order) {
-                        1 => ' ', 2 => '2', 3 => '\'',
-                        else => unreachable,
-                    };
-
-                    std.debug.print("{c}{c} ", .{ label, order });
-                }
-
-                std.debug.print("\n", .{ });
-                solutions += 1;
+                solutions.append(solution) catch unreachable;
             }
         }
 
     } else if (depth > 0) {
-        const p: Phase2Coordinate = .{
-            .cornerPermutation = encodeCornerPermutation(cube),
-            .edgePermutation   = encodeEdgePermutation(cube),
-        };
+        const p = CoordinateCube.fromCubies(cube.*);
         const index = encodePhase2CoordToIndex(p) orelse unreachable;
-        const prune_depth = phase2Prune[index];
+        const prune_depth = PruneTables.phase2[index];
 
         if (prune_depth <= depth) {
             for (allMoves) |move| {
                 cube.turn(move);
+                defer cube.turn(move.inverse());
 
                 moves.append(move) catch unreachable;
-                secondPhaseSearch(cube, depth - 1, moves);
-                _ = moves.pop();
+                defer _ = moves.pop();
 
-                cube.turn(move.inverse());
+                secondPhaseSearch(cube, depth - 1, moves, solutions);
 
-                if (solutions >= max_solutions) {
+                if (solutions.items.len >= max_solutions) {
                     break;
                 }
             }

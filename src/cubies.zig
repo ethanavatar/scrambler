@@ -18,6 +18,26 @@ pub const CubeMove = struct {
             .order = inverse_order,
         };
     }
+
+    pub fn format(
+        self: CubeMove,
+        comptime _: []const u8,
+        _: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void { 
+        const label: u8 = switch (self.face) {
+            .Right => 'R', .Left  => 'L',
+            .Up    => 'U', .Down  => 'D',
+            .Front => 'F', .Back  => 'B',
+        };
+
+        const order: u8 = switch (self.order) {
+            1 => ' ', 2 => '2', 3 => '\'',
+            else => unreachable,
+        };
+
+        try writer.print("{c}{c}", .{ label, order });
+    }
 };
 
 pub const Edge = enum(u8) {
