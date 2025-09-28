@@ -69,13 +69,16 @@ pub const CubieCube = struct {
     pub fn algorithmString(self: *CubieCube, moves: []const u8) void {
         var sequence = std.mem.splitSequence(u8, moves, " ");
         while (sequence.next()) |move| {
-            self.turn(getTurnFromString(move));
+            if (move.len == 0) continue;
+            const cube_turn = getTurnFromString(move);
+            //std.debug.print("move = {s}, turn = {?}\n", .{ move, cube_turn });
+            self.turn(cube_turn);
         }
     }
 
     pub fn turn(self: *CubieCube, cubeTurn: CubeMove) void {
         for (0..cubeTurn.order) |_| {
-            var newState: CubieCube = permutations.solved; 
+            var newState: CubieCube = permutations.solved;
             const permutation = switch (cubeTurn.face) {
                 .Right => permutations.rMove, .Left  => permutations.lMove,
                 .Up    => permutations.uMove, .Down  => permutations.dMove,

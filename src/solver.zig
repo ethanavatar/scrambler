@@ -891,6 +891,10 @@ fn firstPhaseSearch(cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList
                 _ = moves.pop();
 
                 cube.turn(move.inverse());
+
+                if (solutions >= max_solutions) {
+                    break;
+                }
             }
         }
     }
@@ -949,6 +953,10 @@ fn secondPhaseSearch(cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayLis
                 _ = moves.pop();
 
                 cube.turn(move.inverse());
+
+                if (solutions >= max_solutions) {
+                    break;
+                }
             }
         }
     }

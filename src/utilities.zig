@@ -17,7 +17,7 @@ pub fn initAcending(comptime T: type) T {
     return v;
 }
 
-pub fn join_strings(comptime sep: []const u8, comptime args: anytype) []const u8 {
+pub fn joinStrings(comptime sep: []const u8, comptime args: anytype) []const u8 {
     const args_T = @TypeOf(args);
     const args_T_info = @typeInfo(args_T);
 
