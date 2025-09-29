@@ -2,11 +2,11 @@ const std = @import("std");
 const solver = @import("solver.zig");
 const cubies = @import("cubies.zig");
 
-pub var edgeOrientation: [][solver.allMoves.len]u16 = undefined;
-pub var edgePermutation: [][solver.allMoves.len]u16 = undefined;
+pub var edgeOrientation:   [][solver.allMoves.len]u16 = undefined;
+pub var edgePermutation:   [][solver.allMoves.len]u16 = undefined;
 pub var cornerOrientation: [][solver.allMoves.len]u16 = undefined;
 pub var cornerPermutation: [][solver.allMoves.len]u16 = undefined;
-pub var slicePermutation: [][solver.allMoves.len]u16 = undefined;
+pub var slicePermutation:  [][solver.allMoves.len]u16 = undefined;
 
 fn generate(
     total_entries: usize,
@@ -139,6 +139,12 @@ pub fn generateAll(allocator: std.mem.Allocator) !void {
     cornerPermutation = try getTable(
         40320, "cornerPermutationMoves.txt",
         solver.encodeCornerPermutation, solver.decodeCornerPermutation,
+        allocator
+    );
+
+    slicePermutation = try getTable(
+        495, "slicePermutationMoves.txt",
+        solver.encodeSlicePermutation, solver.decodeSlicePermutation,
         allocator
     );
 }

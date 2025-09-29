@@ -13,7 +13,7 @@ fn generate(
     var table = try allocator.alloc(i8, total_entries);
     @memset(table, -1);
 
-    const solved_index = encode_function(.{}) orelse unreachable;
+    const solved_index = encode_function(solver.CoordinateCube.solved()) orelse unreachable;
     table[solved_index] = 0;
 
     var depth:  usize = 0;
@@ -101,20 +101,20 @@ fn getTable(
         else => return e,
     };
 
-    const file = if (table_exists)
-        try tables_directory.openFile(table_filename, .{ })
-   else
-        try tables_directory.createFile(table_filename, .{ .exclusive = true });
-
-    defer file.close();
-
     if (table_exists) {
+        const file = try tables_directory.openFile(table_filename, .{ });
+        defer file.close();
+
         std.debug.print("`{s}` already exists. Reading from file...\n", .{ table_filename });
         return try readTableFromFile(total_entries, file, allocator);
 
     } else {
-        std.debug.print("Generating new table and writing to `{s}`...\n", .{ table_filename });
         const table = try generate(total_entries, encode_function, decode_function, allocator);
+
+        const file = try tables_directory.createFile(table_filename, .{ .exclusive = true });
+        defer file.close();
+
+        std.debug.print("Generating new table and writing to `{s}`...\n", .{ table_filename });
         return try writeToFile(file, table);
     }
 }
