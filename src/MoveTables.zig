@@ -141,10 +141,4 @@ pub fn generateAll(allocator: std.mem.Allocator) !void {
         solver.encodeCornerPermutation, solver.decodeCornerPermutation,
         allocator
     );
-    
-    slicePermutation = try getTable(
-        495, "slicePermutationMoves.txt",
-        solver.encodeSlicePermutation, solver.decodeSlicePermutation,
-        allocator
-    );
 }
