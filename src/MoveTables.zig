@@ -6,6 +6,7 @@ pub var edgeOrientation: [][solver.allMoves.len]u16 = undefined;
 pub var edgePermutation: [][solver.allMoves.len]u16 = undefined;
 pub var cornerOrientation: [][solver.allMoves.len]u16 = undefined;
 pub var cornerPermutation: [][solver.allMoves.len]u16 = undefined;
+pub var slicePermutation: [][solver.allMoves.len]u16 = undefined;
 
 fn generate(
     total_entries: usize,
@@ -98,19 +99,20 @@ fn getTable(
         else => return e,
     };
 
-    const file = if (table_exists) 
-        try tables_directory.openFile(table_filename, .{ })
-    else
-        try tables_directory.createFile(table_filename, .{ .exclusive = true });
-
-    defer file.close();
-
     if (table_exists) {
+        const file = try tables_directory.openFile(table_filename, .{ });
+        defer file.close();
+
         std.debug.print("`{s}` already exists. Reading from file...\n", .{ table_filename });
         return try readTableFromFile(total_entries, file, allocator);
+
     } else {
-        std.debug.print("Generating new table and writing to `{s}`...\n", .{ table_filename });
         const table = try generate(total_entries, encode_function, decode_function, allocator);
+
+        const file = try tables_directory.createFile(table_filename, .{ .exclusive = true });
+        defer file.close();
+
+        std.debug.print("Generating new table and writing to `{s}`...\n", .{ table_filename });
         return try writeToFile(file, table);
     }
 }
@@ -137,6 +139,12 @@ pub fn generateAll(allocator: std.mem.Allocator) !void {
     cornerPermutation = try getTable(
         40320, "cornerPermutationMoves.txt",
         solver.encodeCornerPermutation, solver.decodeCornerPermutation,
+        allocator
+    );
+    
+    slicePermutation = try getTable(
+        495, "slicePermutationMoves.txt",
+        solver.encodeSlicePermutation, solver.decodeSlicePermutation,
         allocator
     );
 }

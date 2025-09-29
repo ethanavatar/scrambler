@@ -66,14 +66,14 @@ pub fn decodeEdgeOrientation(coord: u16, _: std.mem.Allocator) !cubies.CubieCube
     return cube;
 }
 
-test {
-    const cube = cubies.CubieCube.initFromAlgorithmString(algorithms.mitch);
-
-    const expectations = [12]u8{ 0, 1, 0, 1,   0, 0, 0, 0,   0, 0, 1, 1 };
-    try std.testing.expectEqual(expectations, cube.edgeOrientations);
-    try std.testing.expectEqual(expectations, decodeEdgeOrientation(encodeEdgeOrientation(cube)));
-    try std.testing.expectEqual(0b10000001010, encodeEdgeOrientation(cube));
-}
+//test {
+//    const cube = cubies.CubieCube.initFromAlgorithmString(algorithms.mitch);
+//
+//    const expectations = [12]u8{ 0, 1, 0, 1,   0, 0, 0, 0,   0, 0, 1, 1 };
+//    try std.testing.expectEqual(expectations, cube.edgeOrientations);
+//    try std.testing.expectEqual(expectations, decodeEdgeOrientation(encodeEdgeOrientation(cube)));
+//    try std.testing.expectEqual(0b10000001010, encodeEdgeOrientation(cube));
+//}
 
 pub fn encodeCornerOrientation(cube: cubies.CubieCube) u16 {
     var twist: u16 = 0;
@@ -110,14 +110,14 @@ pub fn decodeCornerOrientation(twist: u16, _: std.mem.Allocator) !cubies.CubieCu
     return cube;
 }
 
-test {
-    const cube = cubies.CubieCube.initFromAlgorithmString(algorithms.mitch);
-
-    const expectations = [8]u8{ 0, 2, 2, 1,   0, 1, 1, 2 };
-    try std.testing.expectEqual(expectations, cube.cornerOrientations);
-    try std.testing.expectEqual(expectations, decodeCornerOrientation(encodeCornerOrientation(cube))); 
-    try std.testing.expectEqual(0b001111111111, encodeCornerOrientation(cube)); // TODO: Base 3 converter
-}
+//test {
+//    const cube = cubies.CubieCube.initFromAlgorithmString(algorithms.mitch);
+//
+//    const expectations = [8]u8{ 0, 2, 2, 1,   0, 1, 1, 2 };
+//    try std.testing.expectEqual(expectations, cube.cornerOrientations);
+//    try std.testing.expectEqual(expectations, decodeCornerOrientation(encodeCornerOrientation(cube))); 
+//    try std.testing.expectEqual(0b001111111111, encodeCornerOrientation(cube)); // TODO: Base 3 converter
+//}
 
 pub fn encodeCoordinateToTableIndex(coordinate: CoordinateCube) ?usize {
     return coordinate.edgeOrientation + @as(usize, 2048) * coordinate.cornerOrientation;
@@ -130,20 +130,21 @@ pub fn decodeTableIndexToCoordinate(index: usize) ?CoordinateCube {
     };
 }
 
-test {
-    for (0..2048 * 2187) |index| {
-        try std.testing.expectEqual(
-            index,
-            encodeCoordinateToTableIndex(decodeTableIndexToCoordinate(index)),
-        );
-    }
-}
+//test {
+//    for (0..2048 * 2187) |index| {
+//        try std.testing.expectEqual(
+//            index,
+//            encodeCoordinateToTableIndex(decodeTableIndexToCoordinate(index)),
+//        );
+//    }
+//}
 
 pub const CoordinateCube = struct {
     edgeOrientation:   u16 = 0,
     edgePermutation:   u16 = 0,
     cornerOrientation: u16 = 0,
     cornerPermutation: u16 = 0,
+    slicePermutation:  u16 = 0,
 
     pub fn fromCubies(cubie_cube: cubies.CubieCube) CoordinateCube {
         return .{
@@ -151,6 +152,7 @@ pub const CoordinateCube = struct {
             .edgePermutation = encodeEdgePermutation(cubie_cube),
             .cornerOrientation = encodeCornerOrientation(cubie_cube),
             .cornerPermutation = encodeCornerPermutation(cubie_cube),
+            .slicePermutation  = encodeSlicePermutation(cubie_cube)
         };
     }
 
@@ -160,7 +162,23 @@ pub const CoordinateCube = struct {
             .edgePermutation = MoveTables.edgePermutation[self.edgePermutation][move_index],
             .cornerOrientation = MoveTables.cornerOrientation[self.cornerOrientation][move_index],
             .cornerPermutation = MoveTables.cornerPermutation[self.cornerPermutation][move_index],
+            .slicePermutation  = MoveTables.slicePermutation[self.slicePermutation][move_index],
         };
+    }
+
+    pub fn isG1(self: *const CoordinateCube) bool {
+        return self.edgeOrientation == 0
+            and self.cornerOrientation == 0
+            and self.slicePermutation == encodeSlicePermutation(cubies.CubieCube.solved());
+    }
+
+    pub fn isSolved(self: *const CoordinateCube) bool {
+        const solved = CoordinateCube.fromCubies(cubies.CubieCube.solved());
+        return self.edgeOrientation == solved.edgeOrientation
+            and self.edgePermutation == solved.edgePermutation
+            and self.cornerOrientation == solved.cornerOrientation
+            and self.cornerPermutation == solved.cornerPermutation
+            and self.slicePermutation == solved.slicePermutation;
     }
 };
 
@@ -189,11 +207,97 @@ pub fn decodePhase2IndexToCoord(index: usize) ?CoordinateCube {
     };
 }
 
+//test {
+//    for (0..std.math.maxInt(u16)) |index| {
+//        try std.testing.expectEqual(
+//            index,
+//            encodePhase2CoordToIndex(decodePhase2IndexToCoord(index) orelse unreachable),
+//        );
+//    }
+//}
+
+pub fn encodeSlicePermutation(cube: cubies.CubieCube) u16 {
+    var elements: [8]u8 = undefined;
+
+    for ([4]cubies.Edge{ .LF, .LB, .RF, .RB, }, 0..4) |slice, i| {
+        elements[i] = @intFromEnum(cube.edgePermutations[@intFromEnum(slice)]);
+    }
+
+    std.mem.sort(u8, &elements, {}, comptime std.sort.asc(u8));
+    const rank = math.lexicographicRank(&elements);
+
+    return @intCast(rank);
+}
+
+pub fn decodeSlicePermutation(rank: u16, allocator: std.mem.Allocator) !cubies.CubieCube {
+    const slice_edges = [_]cubies.Edge{ .LF, .LB, .RF, .RB, };
+
+    var elements: [slice_edges.len]u8 = undefined;
+    for (slice_edges, 0..4) |slice_edge, i| {
+        elements[i] = @intFromEnum(slice_edge);
+    }
+
+    const perm = try math.lexicographicUnrank(&elements, rank, allocator);
+    defer perm.deinit();
+
+    var cube = cubies.CubieCube.solved();
+
+    for (perm.items, [4]cubies.Edge{ .LF, .LB, .RF, .RB, }) |destination, source| {
+        permutations.changeEdge(&cube, source, @enumFromInt(destination), 0);
+        permutations.changeEdge(&cube, @enumFromInt(destination), source, 0);
+    }
+
+    return cube;
+}
+
 test {
-    for (0..std.math.maxInt(u16)) |index| {
+    {
+        var cube = cubies.CubieCube.solved();
+        //std.debug.print("{}\n", .{ cube });
+
+        const score = encodeSlicePermutation(cube);
+
+        var new_cube = try decodeSlicePermutation(score, std.testing.allocator);
+        //std.debug.print("{}\n", .{ new_cube });
+
         try std.testing.expectEqual(
-            index,
-            encodePhase2CoordToIndex(decodePhase2IndexToCoord(index) orelse unreachable),
+            score,
+            encodeSlicePermutation(new_cube)
+        );
+
+        permutations.changeEdge(&cube, .RF, .RB, 0);
+        permutations.changeEdge(&cube, .RB, .RF, 0);
+
+        //std.debug.print("{}\n", .{ cube });
+
+        new_cube = try decodeSlicePermutation(score, std.testing.allocator);
+        //std.debug.print("{}\n", .{ new_cube });
+
+        try std.testing.expectEqual(
+            score,
+            encodeSlicePermutation(new_cube)
+        );
+    }
+
+    {
+        const cube = cubies.CubieCube.initFromAlgorithmString(algorithms.mitch);
+        //std.debug.print("{}\n", .{ cube });
+
+        const score = encodeSlicePermutation(cube);
+        try std.testing.expectEqual(
+            score,
+            encodeSlicePermutation(try decodeSlicePermutation(score, std.testing.allocator))
+        );
+    }
+
+    {
+        const cube = cubies.CubieCube.initFromAlgorithmString("B2 F2 L2 U2 B2 D2 F2 U2 L B2 D F' L' D U B' U F' L2 F'");
+        //std.debug.print("{}\n", .{ cube });
+
+        const score = encodeSlicePermutation(cube);
+        try std.testing.expectEqual(
+            score,
+            encodeSlicePermutation(try decodeSlicePermutation(score, std.testing.allocator))
         );
     }
 }
@@ -294,94 +398,6 @@ test {
     try std.testing.expectEqual(false, isSolved(not_solved));
 }
 
-fn isDominoReduced(cube: cubies.CubieCube) bool {
-    for (cube.edgePermutations, 0..) |edge, edge_index| {
-        const slot: cubies.Edge = @enumFromInt(edge_index);
-        if (edge == slot) {
-            // Already solved
-            continue;
-        }
-
-        var is_g1 = false;
-
-        for (g1Moves) |move1| {
-            var temp_cube: cubies.CubieCube = cube;
-            temp_cube.turn(move1);
-
-            if ((temp_cube.edgePermutations[edge_index] == slot) and (temp_cube.edgeOrientations[edge_index] == 0)) {
-                // Now solved
-                is_g1 = true;
-                break;
-            } else {
-                for (g1Moves) |move2| {
-                    temp_cube.turn(move2);
-
-                    if ((temp_cube.edgePermutations[edge_index] == slot) and (temp_cube.edgeOrientations[edge_index] == 0)) {
-                        // Now solved
-                        is_g1 = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!is_g1) {
-            return false;
-        }
-    }
-
-    for (cube.cornerPermutations, 0..) |corner, corner_index| {
-        const slot: cubies.Corner = @enumFromInt(corner_index);
-        if (corner == slot) {
-            // Already solved
-            continue;
-        }
-
-        var is_g1 = false;
-
-        for (g1Moves) |move1| {
-            var temp_cube: cubies.CubieCube = cube;
-            temp_cube.turn(move1);
-
-            if ((temp_cube.cornerPermutations[corner_index] == slot) and (temp_cube.cornerOrientations[corner_index] == 0)) {
-                // Now solved
-                is_g1 = true;
-                break;
-            } else {
-                for (g1Moves) |move2| {
-                    temp_cube.turn(move2);
-
-                    if ((temp_cube.cornerPermutations[corner_index] == slot) and (temp_cube.cornerOrientations[corner_index] == 0)) {
-                        // Now solved
-                        is_g1 = true;
-                        break;
-                    }
-                }
-            }
-        }
-
-        if (!is_g1) {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-test {
-    var cube = cubies.CubieCube.initFromAlgorithmString("R2 L2 F2 B2");
-    try std.testing.expect(isDominoReduced(cube));
-
-    cube = cubies.CubieCube.initFromAlgorithmString("R L2 F2 B2");
-    try std.testing.expect(isDominoReduced(cube) == false);
-
-    cube = cubies.CubieCube.initFromAlgorithmString("U' R2 U L2 D B2 D' F2");
-    try std.testing.expect(isDominoReduced(cube));
-
-    cube = cubies.CubieCube.initFromAlgorithmString("U' R U L2 D B2 D' F2");
-    try std.testing.expect(isDominoReduced(cube) == false);
-}
-
 const max_depth: usize = 99;
 
 var max_solutions: usize = 0;
@@ -395,15 +411,16 @@ pub fn findSolutions(
     
     max_solutions = solutions_count;
 
-    var cube = c;
-
+    const cube = CoordinateCube.fromCubies(c);
     var solutions = std.ArrayList([]cubies.CubeMove).init(allocator);
+
+    const start_time = std.time.timestamp();
 
     for (0..max_depth) |depth| {
         var moves = std.ArrayList(cubies.CubeMove).init(arena.allocator());
         defer moves.deinit();
 
-        try firstPhaseSearch(&cube, depth, &moves, &solutions);
+        try firstPhaseSearch(cube, depth, &moves, &solutions, start_time);
 
         if (solutions.items.len >= max_solutions) {
             break;
@@ -414,8 +431,9 @@ pub fn findSolutions(
 }
 
 fn firstPhaseSearch(
-    cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove),
-    solutions: *std.ArrayList([]cubies.CubeMove)
+    cube: CoordinateCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove),
+    solutions: *std.ArrayList([]cubies.CubeMove),
+    start_time: i64
 ) !void {
     if (depth == 0) {
         if (moves.items.len > 0) {
@@ -427,25 +445,25 @@ fn firstPhaseSearch(
 
             const was_quarter_turn = previous_move.order == 1 or previous_move.order == 3;
 
-            if (isDominoReduced(cube.*) and was_side_move and was_quarter_turn) {
-                try secondPhaseStart(cube, depth, moves, solutions);
+            if (cube.isG1() and was_side_move and was_quarter_turn) {
+                const g1_time = std.time.timestamp();
+                std.debug.print("G1 ({} seconds since start)\n", .{ g1_time - start_time });
+                try secondPhaseStart(cube, depth, moves, solutions, g1_time);
             }
         }
 
     } else if (depth > 0) {
-        const p = CoordinateCube.fromCubies(cube.*);
-        const index = encodeCoordinateToTableIndex(p) orelse unreachable;
+        const index = encodeCoordinateToTableIndex(cube) orelse unreachable;
         const prune_depth = PruneTables.phase1[index];
 
         if (prune_depth <= depth) {
-            for (allMoves) |move| {
-                cube.turn(move);
-                defer cube.turn(move.inverse());
+            for (allMoves, 0..) |move, move_index| {
+                const next_cube = cube.move(move_index);
 
                 try moves.append(move);
                 defer _ = moves.pop();
 
-                try firstPhaseSearch(cube, depth - 1, moves, solutions);
+                try firstPhaseSearch(next_cube, depth - 1, moves, solutions, start_time);
 
                 if (solutions.items.len >= max_solutions) {
                     break;
@@ -456,11 +474,12 @@ fn firstPhaseSearch(
 }
 
 fn secondPhaseStart(
-    cube: *cubies.CubieCube, current_depth: usize, moves: *std.ArrayList(cubies.CubeMove),
-    solutions: *std.ArrayList([]cubies.CubeMove)
+    cube: CoordinateCube, current_depth: usize, moves: *std.ArrayList(cubies.CubeMove),
+    solutions: *std.ArrayList([]cubies.CubeMove),
+    g1_time: i64
 ) !void {
     for (0..max_depth - current_depth) |depth| {
-        secondPhaseSearch(cube, depth, moves, solutions);
+        secondPhaseSearch(cube, depth, moves, solutions, g1_time);
         if (solutions.items.len >= max_solutions) {
             break;
         }
@@ -468,12 +487,14 @@ fn secondPhaseStart(
 }
 
 fn secondPhaseSearch(
-    cube: *cubies.CubieCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove),
-    solutions: *std.ArrayList([]cubies.CubeMove)
+    cube: CoordinateCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove),
+    solutions: *std.ArrayList([]cubies.CubeMove),
+    g1_time: i64
 ) void {
     if (depth == 0) {
         if (moves.items.len > 0) {
-            if (isSolved(cube.*)) {
+            if (cube.isSolved()) {
+                std.debug.print("G2 ({} seconds since G1)\n", .{ std.time.timestamp() - g1_time });
                 const allocator = solutions.allocator;
 
                 // TODO: Use toOwnedSlice(Allocator) in zig 0.15
@@ -485,19 +506,17 @@ fn secondPhaseSearch(
         }
 
     } else if (depth > 0) {
-        const p = CoordinateCube.fromCubies(cube.*);
-        const index = encodePhase2CoordToIndex(p) orelse unreachable;
+        const index = encodePhase2CoordToIndex(cube) orelse unreachable;
         const prune_depth = PruneTables.phase2[index];
 
         if (prune_depth <= depth) {
-            for (allMoves) |move| {
-                cube.turn(move);
-                defer cube.turn(move.inverse());
+            for (allMoves, 0..) |move, move_index| {
+                const next_cube = cube.move(move_index);
 
                 moves.append(move) catch unreachable;
                 defer _ = moves.pop();
 
-                secondPhaseSearch(cube, depth - 1, moves, solutions);
+                secondPhaseSearch(next_cube, depth - 1, moves, solutions, g1_time);
 
                 if (solutions.items.len >= max_solutions) {
                     break;

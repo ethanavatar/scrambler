@@ -1,5 +1,21 @@
 const std = @import("std");
 
+pub fn binomialCoefficient(n: u64, k_in: u64) u64 {
+    if (n == 0)    return 0;
+    //if (k_in == 0) return 1;
+    if (k_in > n)  return 0;
+
+    const k = if (k_in < n - k_in) k_in else n - k_in;
+
+    var result: u64 = 1;
+    for (1..k + 1) |i| {
+        result *= (n - i + 1);
+        result /= i;
+    }
+
+    return result;
+}
+
 fn factorial(n: u64) u64 {
     var result: u64 = 1;
 
@@ -42,10 +58,13 @@ pub fn lexicographicUnrank(e: []const u8, r: u64, allocator: std.mem.Allocator) 
 
     var elements = std.ArrayList(u8).init(allocator);
     defer elements.deinit();
+
     try elements.appendSlice(e);
 
     var permutation = std.ArrayList(u8).init(allocator);
     var rank = r;
+
+    std.debug.print("rank = {}\n", .{ rank });
     
     for (0..n) |i| {
         const f = factorial(n - i - 1);
