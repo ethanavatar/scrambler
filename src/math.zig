@@ -37,15 +37,15 @@ pub fn lexicographicRank(permutation: []const u8) u64 {
     return rank;
 }
 
-pub fn lexicographicUnrank(e: []const u8, r: u64, allocator: std.mem.Allocator) !std.ArrayList(u8) {
+pub fn lexicographicUnrank(e: []const u8, r: u64, allocator: std.mem.Allocator) !std.array_list.Managed(u8) {
     const n = e.len;
 
-    var elements = std.ArrayList(u8).init(allocator);
+    var elements = std.array_list.Managed(u8).init(allocator);
     defer elements.deinit();
 
     try elements.appendSlice(e);
 
-    var permutation = std.ArrayList(u8).init(allocator);
+    var permutation = std.array_list.Managed(u8).init(allocator);
     var rank = r;
 
     for (0..n) |i| {

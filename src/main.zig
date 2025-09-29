@@ -20,7 +20,7 @@ pub fn main() !void {
 
     std.debug.print("Scramble: {s}\n", .{ scramble });
     var cube = cubies.CubieCube.initFromAlgorithmString(scramble);
-    std.debug.print("{}\n", .{ cube });
+    std.debug.print("{f}\n", .{ cube });
 
     const solutions = try solver.findSolutions(cube, 10, allocator);
     std.debug.print("Generated {} Solutions.\n", .{ solutions.items.len });
@@ -30,11 +30,11 @@ pub fn main() !void {
 
         std.debug.print("Solution {}: ", .{ i });
         for (solution) |move| {
-            std.debug.print("{} ", .{ move });
+            std.debug.print("{f} ", .{ move });
             cube.turn(move);
         }
         std.debug.print("\n", .{ });
 
-        std.debug.print("{}\n", .{ cube });
+        std.debug.print("{f}\n", .{ cube });
     }
 }

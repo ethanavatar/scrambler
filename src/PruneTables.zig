@@ -51,11 +51,12 @@ fn writeToFile(
     file: std.fs.File,
     table: []i8
 ) ![]i8 {
-    var writer = file.writer();
     var line_buffer: [255]u8 = undefined;
+    const file_writer = file.writer(&line_buffer);
+    var writer = file_writer.interface;
 
     for (table) |depth| {
-        try writer.writeAll(try std.fmt.bufPrint(&line_buffer, "{}\n", .{ depth }));
+        try writer.print("{}\n", .{ depth });
     }
 
     return table;

@@ -254,7 +254,7 @@ pub fn encodeSlicePermutation(cube: cubies.CubieCube) u16 {
 }
 
 pub fn decodeSlicePermutation(rank: u16, allocator: std.mem.Allocator) !cubies.CubieCube {
-    var combo = std.ArrayList(u8).init(allocator);
+    var combo = std.array_list.Managed(u8).init(allocator);
     defer combo.deinit();
 
     var current_n: usize = 12;
@@ -416,22 +416,23 @@ var max_solutions: usize = 0;
 pub fn findSolutions(
     c: cubies.CubieCube, solutions_count: usize,
     allocator: std.mem.Allocator,
-) !std.ArrayList([]cubies.CubeMove) {
+) !std.array_list.Managed([]cubies.CubeMove) {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     
     max_solutions = solutions_count;
 
-    const cube = CoordinateCube.fromCubies(c);
-    var solutions = std.ArrayList([]cubies.CubeMove).init(allocator);
+    var cube = c;
+
+    var solutions = std.array_list.Managed([]cubies.CubeMove).init(allocator);
 
     const start_time = std.time.timestamp();
 
     for (0..max_depth) |depth| {
-        var moves = std.ArrayList(cubies.CubeMove).init(arena.allocator());
+        var moves = std.array_list.Managed(cubies.CubeMove).init(arena.allocator());
         defer moves.deinit();
 
-        try firstPhaseSearch(cube, depth, &moves, &solutions, start_time);
+        try firstPhaseSearch(&cube, depth, &moves, &solutions, start_time);
 
         if (solutions.items.len >= max_solutions) {
             break;
@@ -442,10 +443,12 @@ pub fn findSolutions(
 }
 
 fn firstPhaseSearch(
-    cube: CoordinateCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove),
-    solutions: *std.ArrayList([]cubies.CubeMove),
+    cube: *cubies.CubieCube, depth: usize, moves: *std.array_list.Managed(cubies.CubeMove),
+    solutions: *std.array_list.Managed([]cubies.CubeMove),
     start_time: i64
 ) !void {
+    const coord_cube = CoordinateCube.fromCubies(cube.*);
+
     if (depth == 0) {
         if (moves.items.len > 0) {
             const previous_move = moves.getLast();
@@ -456,35 +459,27 @@ fn firstPhaseSearch(
 
             const was_quarter_turn = previous_move.order == 1 or previous_move.order == 3;
 
-            if (cube.isG1() and was_side_move and was_quarter_turn) {
+            if (coord_cube.isG1() and was_side_move and was_quarter_turn) {
                 const g1_time = std.time.timestamp();
                 std.debug.print("G1 ({} seconds since start)\n", .{ g1_time - start_time });
 
-                //for (moves.items) |move| {
-                //    std.debug.print("{} ", .{ move });
-                //}
-                //std.debug.print("\n", .{ });
-
-                //try secondPhaseStart(cube, depth, moves, solutions, g1_time);
-                const solution = solutions.allocator.alloc(cubies.CubeMove, moves.items.len) catch unreachable;
-                std.mem.copyForwards(cubies.CubeMove, solution, moves.items);
-
-                solutions.append(solution) catch unreachable;
+                try secondPhaseStart(cube, depth, moves, solutions, g1_time);
             }
         }
 
     } else if (depth > 0) {
-        const index = encodeCoordinateToTableIndex(cube) orelse unreachable;
+        const index = encodeCoordinateToTableIndex(coord_cube) orelse unreachable;
         const prune_depth = PruneTables.phase1[index];
 
         if (prune_depth <= depth) {
-            for (allMoves, 0..) |move, move_index| {
-                const next_cube = cube.move(move_index);
-
+            for (allMoves) |move| {
                 try moves.append(move);
                 defer _ = moves.pop();
 
-                try firstPhaseSearch(next_cube, depth - 1, moves, solutions, start_time);
+                cube.turn(move);
+                defer cube.turn(move.inverse());
+
+                try firstPhaseSearch(cube, depth - 1, moves, solutions, start_time);
 
                 if (solutions.items.len >= max_solutions) {
                     break;
@@ -495,8 +490,8 @@ fn firstPhaseSearch(
 }
 
 fn secondPhaseStart(
-    cube: CoordinateCube, current_depth: usize, moves: *std.ArrayList(cubies.CubeMove),
-    solutions: *std.ArrayList([]cubies.CubeMove),
+    cube: *cubies.CubieCube, current_depth: usize, moves: *std.array_list.Managed(cubies.CubeMove),
+    solutions: *std.array_list.Managed([]cubies.CubeMove),
     g1_time: i64
 ) !void {
     for (0..max_depth - current_depth) |depth| {
@@ -508,16 +503,18 @@ fn secondPhaseStart(
 }
 
 fn secondPhaseSearch(
-    cube: CoordinateCube, depth: usize, moves: *std.ArrayList(cubies.CubeMove),
-    solutions: *std.ArrayList([]cubies.CubeMove),
+    cube: *cubies.CubieCube, depth: usize, moves: *std.array_list.Managed(cubies.CubeMove),
+    solutions: *std.array_list.Managed([]cubies.CubeMove),
     g1_time: i64
 ) void {
+    const coord_cube = CoordinateCube.fromCubies(cube.*);
+
     if (depth == 0) {
-        if (cube.isSolved()) {
+        if (isSolved(cube.*)) {
             std.debug.print("G2 ({} seconds since G1)\n", .{ std.time.timestamp() - g1_time });
             const allocator = solutions.allocator;
 
-            // TODO: Use toOwnedSlice(Allocator) in zig 0.15
+            // If I used an unmanaged arraylist, I could use toOwnedSlice(Allocator)
             const solution = allocator.alloc(cubies.CubeMove, moves.items.len) catch unreachable;
             std.mem.copyForwards(cubies.CubeMove, solution, moves.items);
 
@@ -525,17 +522,19 @@ fn secondPhaseSearch(
         }
 
     } else if (depth > 0) {
-        const index = encodePhase2CoordToIndex(cube) orelse unreachable;
+        const index = encodePhase2CoordToIndex(coord_cube) orelse unreachable;
         const prune_depth = PruneTables.phase2[index];
 
         if (prune_depth <= depth) {
-            for (g1Moves, 0..) |move, move_index| {
-                const next_cube = cube.move(move_index);
+            for (g1Moves) |move| {
 
                 moves.append(move) catch unreachable;
                 defer _ = moves.pop();
 
-                secondPhaseSearch(next_cube, depth - 1, moves, solutions, g1_time);
+                cube.turn(move);
+                defer cube.turn(move.inverse());
+
+                secondPhaseSearch(cube, depth - 1, moves, solutions, g1_time);
 
                 if (solutions.items.len >= max_solutions) {
                     break;

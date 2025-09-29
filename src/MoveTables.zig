@@ -38,12 +38,14 @@ fn writeToFile(
     file: std.fs.File,
     table: [][solver.allMoves.len]u16
 ) ![][solver.allMoves.len]u16 {
-    var writer = file.writer();
+
     var line_buffer: [255]u8 = undefined;
+    const file_writer = file.writer(&line_buffer);
+    var writer = file_writer.interface;
 
     for (table, 0..) |coords, coord| {
         for (table[coord], 0..) |_, move| {
-            try writer.writeAll(try std.fmt.bufPrint(&line_buffer, "{},{},{}\n", .{ coord, move, coords[move] }));
+            try writer.print("{},{},{}\n", .{ coord, move, coords[move] });
         }
     }
 

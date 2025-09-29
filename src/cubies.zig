@@ -21,9 +21,7 @@ pub const CubeMove = struct {
 
     pub fn format(
         self: CubeMove,
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *std.Io.Writer,
     ) !void { 
         const label: u8 = switch (self.face) {
             .Right => 'R', .Left  => 'L',
@@ -142,10 +140,8 @@ pub const CubieCube = struct {
 
     pub fn format(
         self: CubieCube,
-        comptime _: []const u8,
-        _: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *std.Io.Writer,
     ) !void { 
-        try writer.print("{s}", .{ facelets.FaceletCube.fromCubies(self) });
+        try writer.print("{f}", .{ facelets.FaceletCube.fromCubies(self) });
     }
 };
