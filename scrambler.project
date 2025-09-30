@@ -1,5 +1,6 @@
 // raddbg 0.9.21 project file
 
+recent_file: path: "src/Tables.zig"
 recent_file: path: "src/solver.zig"
 recent_file: path: "../../AppData/Local/Microsoft/WinGet/Packages/zig.zig_Microsoft.Winget.Source_8wekyb3d8bbwe/zig-windows-x86_64-0.14.0/lib/std/posix.zig"
 recent_file: path: "../../.local-programs/zig-windows-x86_64-0.14.0/lib/compiler_rt/stack_probe.zig"
@@ -11,6 +12,6 @@ target:
 target:
 {
   executable: "zig-out/bin/scrambler.exe"
-  working_directory: "zig-out/bin/"
+  working_directory: "zig-out/bin"
   enabled: 1
 }

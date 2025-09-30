@@ -161,11 +161,11 @@ pub const CoordinateCube = struct {
 
     pub fn move(self: *const CoordinateCube, move_index: usize) CoordinateCube {
         return .{
-            .edgeOrientation   = Tables.edgeOrientation[self.edgeOrientation][move_index],
-            .edgePermutation   = Tables.edgePermutation[self.edgePermutation][move_index],
-            .cornerOrientation = Tables.cornerOrientation[self.cornerOrientation][move_index],
-            .cornerPermutation = Tables.cornerPermutation[self.cornerPermutation][move_index],
-            .slicePermutation  = Tables.slicePermutation[self.slicePermutation][move_index],
+            .edgeOrientation   = Tables.tables.edgeOrientation.table[self.edgeOrientation][move_index],
+            .edgePermutation   = Tables.tables.edgePermutation.table[self.edgePermutation][move_index],
+            .cornerOrientation = Tables.tables.cornerOrientation.table[self.cornerOrientation][move_index],
+            .cornerPermutation = Tables.tables.cornerPermutation.table[self.cornerPermutation][move_index],
+            .slicePermutation  = Tables.tables.slicePermutation.table[self.slicePermutation][move_index],
         };
     }
 
@@ -468,7 +468,7 @@ fn firstPhaseSearch(
 
     } else if (depth > 0) {
         const index = encodeCoordinateToTableIndex(coord_cube) orelse unreachable;
-        const prune_depth = Tables.phase1[index];
+        const prune_depth = Tables.tables.phase1.table[index];
 
         if (prune_depth <= depth) {
             for (allMoves) |move| {
@@ -522,7 +522,7 @@ fn secondPhaseSearch(
 
     } else if (depth > 0) {
         const index = encodePhase2CoordToIndex(coord_cube) orelse unreachable;
-        const prune_depth = Tables.phase2[index];
+        const prune_depth = Tables.tables.phase2.table[index];
 
         if (prune_depth <= depth) {
             for (g1Moves) |move| {

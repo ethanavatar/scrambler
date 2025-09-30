@@ -7,20 +7,14 @@ const win32 = @cImport({
 });
 
 dir: std.fs.Dir,
-count: std.atomic.Value(u32) = std.atomic.Value(u32).init(0),
-created_new_file: bool = true,
+file_name: []const u8,
+
+offset: usize = 0,
 
 const Self = @This();
 
-/// Metadata stored at the end of each allocation.
-const Metadata = extern struct {
-    file_index: u32,
-    mmap_size: usize align(4),
-};
-
-/// Returns the aligned size with enough space for `size` and `Metadata` at the end.
 inline fn alignedFileSize(size: usize) usize {
-    return std.mem.alignForward(usize, size + @sizeOf(Metadata), std.heap.pageSize());
+    return std.mem.alignForward(usize, size, std.heap.pageSize());
 }
 
 pub inline fn allocator(self: *Self) std.mem.Allocator {
@@ -45,24 +39,18 @@ fn alloc(
     const self: *Self = @ptrCast(@alignCast(ctx));
 
     const file_aligned_size = alignedFileSize(requested_size);
-    const file_index = self.count.fetchAdd(1, .monotonic);
-
-    var file_name_buf: [255]u8 = undefined;
-    const file_name = std.fmt.bufPrint(&file_name_buf, "bin_{d}", .{ file_index }) catch unreachable;
 
     var file_exists = true;
 
-    self.dir.access(file_name, .{ }) catch |e| switch (e) {
+    self.dir.access(self.file_name, .{ }) catch |e| switch (e) {
         error.FileNotFound => file_exists = false,
         else => return null,
     };
 
     const file = if (file_exists)
-        self.dir.openFile(file_name, .{ .mode = .read_write }) catch return null
+        self.dir.openFile(self.file_name, .{ .mode = .read_write }) catch return null
     else
-        self.dir.createFile(file_name, .{ .read = true }) catch return null;
-
-    self.created_new_file = !file_exists;
+        self.dir.createFile(self.file_name, .{ .read = true }) catch return null;
 
     defer file.close();
 
@@ -95,12 +83,15 @@ fn alloc(
     );
     defer _ = win32.CloseHandle(fm);
 
-    const full_alloc: []u8 = @as([*]u8, @ptrCast(win32.MapViewOfFile(
+    const full_alloc: []align(std.heap.pageSize()) u8 = @alignCast(@as([*]u8, @ptrCast(win32.MapViewOfFile(
         fm,
         win32.FILE_MAP_ALL_ACCESS,
-        0, 0,
+        @intCast((self.offset >> 32) & @as(u32, 0xFFFFFFFF)),
+        @intCast(self.offset & @as(u32, 0xFFFFFFFF)),
         file_aligned_size
-    ) orelse unreachable))[0..file_aligned_size];
+    ) orelse unreachable))[0..file_aligned_size]);
+
+    self.offset += full_alloc.len;
 
     //const full_alloc: []u8 = win32.MapViewOfFile(
     //    fm,
@@ -110,66 +101,20 @@ fn alloc(
     //    file_aligned_size
     //) orelse unreachable;
 
-    std.debug.assert(requested_size <= file_aligned_size - @sizeOf(Metadata)); // sanity check
-    const metadata_start = file_aligned_size - @sizeOf(Metadata);
-    std.mem.bytesAsValue(Metadata, full_alloc[metadata_start..][0..@sizeOf(Metadata)]).* = .{
-        .file_index = file_index,
-        .mmap_size = file_aligned_size,
-    };
     return full_alloc.ptr;
 }
 
 /// Resizes the allocation within the bounds of the mmap'd address space if possible.
 fn resize(
-    ctx: *anyopaque,
-    buf: []u8,
+    _: *anyopaque,
+    _: []u8,
     _: std.mem.Alignment,
-    requested_size: usize,
-    return_address: usize,
+    _: usize,
+    _: usize,
 ) bool {
-    _ = return_address;
-    const self: *Self = @ptrCast(@alignCast(ctx));
 
-    const old_file_aligned_size = alignedFileSize(buf.len);
-    const new_file_aligned_size = alignedFileSize(requested_size);
-
-    if (new_file_aligned_size == old_file_aligned_size) {
-        return true;
-    }
-
-    const buf_ptr: [*]align(std.heap.pageSize()) u8 = @alignCast(buf.ptr);
-    const old_metadata_start = old_file_aligned_size - @sizeOf(Metadata);
-    const metadata: Metadata = @bitCast(blk: {
-        // you might think this block can be replaced with:
-        //      buf_ptr[old_metadata_start..][0..@sizeOf(Metadata)].*
-        // but no, that causes bus errors. it's not the same!
-        var metadata_bytes: [@sizeOf(Metadata)]u8 = undefined;
-        @memcpy(&metadata_bytes, buf_ptr[old_metadata_start..][0..@sizeOf(Metadata)]);
-        break :blk metadata_bytes;
-    });
-
-    if (new_file_aligned_size > metadata.mmap_size) {
-        return false;
-    }
-
-    var file_name_buf: [255]u8 = undefined;
-    const file_name = std.fmt.bufPrint(&file_name_buf, "bin_{d}", .{ metadata.file_index }) catch unreachable;
-
-    const file = self.dir.openFile(file_name, .{ .mode = .read_write }) catch {
-        return false;
-    };
-    defer file.close();
-
-    file.setEndPos(new_file_aligned_size) catch return false;
-
-    std.debug.assert(requested_size <= new_file_aligned_size - @sizeOf(Metadata));
-    const new_metadata_start = new_file_aligned_size - @sizeOf(Metadata);
-    std.mem.bytesAsValue(
-        Metadata,
-        buf_ptr[new_metadata_start..][0..@sizeOf(Metadata)],
-    ).* = metadata;
-
-    return true;
+    // TODO: https://ziglang.org/documentation/master/std/#src/std/heap/PageAllocator.zig
+    return false;
 }
 
 fn remap(
@@ -197,21 +142,9 @@ fn free(
 ) void {
     _ = return_address;
     _ = ctx;
-    //const self: *Self = @ptrCast(@alignCast(ctx));
-    std.debug.assert(buf.len != 0); // should be ensured by the allocator interface
-
-    //const file_aligned_size = alignedFileSize(buf.len);
-
     const buf_ptr: [*]align(std.heap.pageSize()) u8 = @alignCast(buf.ptr);
-    //const metadata_start = file_aligned_size - @sizeOf(Metadata);
-    //const metadata: Metadata = @bitCast(buf_ptr[metadata_start..][0..@sizeOf(Metadata)].*);
-
-    //var file_name_buf: [255]u8 = undefined;
-    //const file_name = std.fmt.bufPrint(&file_name_buf, "bin_{d}", .{ metadata.file_index }) catch unreachable;
 
     //std.posix.munmap(buf_ptr[0..metadata.mmap_size]);
     _ = win32.FlushViewOfFile(buf_ptr, 0);
     _ = win32.UnmapViewOfFile(buf_ptr);
-
-    //self.dir.deleteFile(file_name) catch { };
 }

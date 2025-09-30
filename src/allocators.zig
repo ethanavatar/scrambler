@@ -5,6 +5,15 @@ pub fn allocUntouched(self: std.mem.Allocator, comptime T: type, n: usize) std.m
     return allocAdvancedWithRetAddr(self, T, null, n, @returnAddress());
 }
 
+pub fn createUntouched(a: std.mem.Allocator, comptime T: type) std.mem.Allocator.Error!*T {
+    if (@sizeOf(T) == 0) {
+        const ptr = comptime std.mem.alignBackward(usize, std.math.maxInt(usize), @alignOf(T));
+        return @ptrFromInt(ptr);
+    }
+    const ptr: *T = @ptrCast(try allocBytesWithAlignment(a, .of(T), @sizeOf(T), @returnAddress()));
+    return ptr;
+}
+
 pub inline fn allocAdvancedWithRetAddr(
     self: std.mem.Allocator,
     comptime T: type,
@@ -55,4 +64,13 @@ pub fn freeUntouched(self: std.mem.Allocator, memory: anytype) void {
     if (bytes_len == 0) return;
     const non_const_ptr = @constCast(bytes.ptr);
     self.rawFree(non_const_ptr[0..bytes_len], .fromByteUnits(Slice.alignment), @returnAddress());
+}
+
+pub fn destroyUntouched(self: std.mem.Allocator, ptr: anytype) void {
+    const info = @typeInfo(@TypeOf(ptr)).pointer;
+    if (info.size != .one) @compileError("ptr must be a single item pointer");
+    const T = info.child;
+    if (@sizeOf(T) == 0) return;
+    const non_const_ptr = @as([*]u8, @ptrCast(@constCast(ptr)));
+    self.rawFree(non_const_ptr[0..@sizeOf(T)], .fromByteUnits(info.alignment), @returnAddress());
 }

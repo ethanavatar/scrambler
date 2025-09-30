@@ -13,8 +13,8 @@ pub fn main() !void {
 
     const allocator = arena.allocator();
 
-    try Tables.generateAll();
-    defer Tables.freeAll();
+    var tables = try Tables.generateAll();
+    defer tables.freeAll();
 
     const scramble = "B2 F2 L2 U2 B2 D2 F2 U2 L B2 D F' L' D U B' U F' L2 F'";
 
