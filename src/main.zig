@@ -4,8 +4,8 @@ const permutations = @import("permutations.zig");
 const cubies = @import("cubies.zig");
 const solver = @import("solver.zig");
 
-const MoveTables = @import("MoveTables.zig");
-const PruneTables = @import("PruneTables.zig");
+const Tables = @import("Tables.zig");
+const allocators = @import("allocators.zig");
 
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
@@ -13,8 +13,8 @@ pub fn main() !void {
 
     const allocator = arena.allocator();
 
-    try MoveTables.generateAll(allocator);
-    try PruneTables.generateAll(allocator);
+    try Tables.generateAll();
+    defer Tables.freeAll();
 
     const scramble = "B2 F2 L2 U2 B2 D2 F2 U2 L B2 D F' L' D U B' U F' L2 F'";
 
@@ -35,6 +35,6 @@ pub fn main() !void {
         }
         std.debug.print("\n", .{ });
 
-        std.debug.print("{f}\n", .{ cube });
+        //std.debug.print("{f}\n", .{ cube });
     }
 }

@@ -5,8 +5,7 @@ const algorithms = @import("algorithms.zig");
 const cubies = @import("cubies.zig");
 const permutations = @import("permutations.zig");
 
-const MoveTables = @import("MoveTables.zig");
-const PruneTables = @import("PruneTables.zig");
+const Tables = @import("Tables.zig");
 
 pub const allMoves = [_]cubies.CubeMove{
     .{ .face = .Right, .order = 1 }, .{ .face = .Right, .order = 2 }, .{ .face = .Right, .order = 3 },
@@ -162,11 +161,11 @@ pub const CoordinateCube = struct {
 
     pub fn move(self: *const CoordinateCube, move_index: usize) CoordinateCube {
         return .{
-            .edgeOrientation   = MoveTables.edgeOrientation[self.edgeOrientation][move_index],
-            .edgePermutation   = MoveTables.edgePermutation[self.edgePermutation][move_index],
-            .cornerOrientation = MoveTables.cornerOrientation[self.cornerOrientation][move_index],
-            .cornerPermutation = MoveTables.cornerPermutation[self.cornerPermutation][move_index],
-            .slicePermutation  = MoveTables.slicePermutation[self.slicePermutation][move_index],
+            .edgeOrientation   = Tables.edgeOrientation[self.edgeOrientation][move_index],
+            .edgePermutation   = Tables.edgePermutation[self.edgePermutation][move_index],
+            .cornerOrientation = Tables.cornerOrientation[self.cornerOrientation][move_index],
+            .cornerPermutation = Tables.cornerPermutation[self.cornerPermutation][move_index],
+            .slicePermutation  = Tables.slicePermutation[self.slicePermutation][move_index],
         };
     }
 
@@ -189,7 +188,7 @@ test {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
 
-    try MoveTables.generateAll(arena.allocator());
+    try Tables.generateAll(arena.allocator());
 
     var cube = CoordinateCube.solved();
     try std.testing.expectEqual(true, cube.isG1());
@@ -461,7 +460,7 @@ fn firstPhaseSearch(
 
             if (coord_cube.isG1() and was_side_move and was_quarter_turn) {
                 const g1_time = std.time.timestamp();
-                std.debug.print("G1 ({} seconds since start)\n", .{ g1_time - start_time });
+                //std.debug.print("G1 ({} seconds since start)\n", .{ g1_time - start_time });
 
                 try secondPhaseStart(cube, depth, moves, solutions, g1_time);
             }
@@ -469,7 +468,7 @@ fn firstPhaseSearch(
 
     } else if (depth > 0) {
         const index = encodeCoordinateToTableIndex(coord_cube) orelse unreachable;
-        const prune_depth = PruneTables.phase1[index];
+        const prune_depth = Tables.phase1[index];
 
         if (prune_depth <= depth) {
             for (allMoves) |move| {
@@ -511,7 +510,7 @@ fn secondPhaseSearch(
 
     if (depth == 0) {
         if (isSolved(cube.*)) {
-            std.debug.print("G2 ({} seconds since G1)\n", .{ std.time.timestamp() - g1_time });
+            //std.debug.print("G2 ({} seconds since G1)\n", .{ std.time.timestamp() - g1_time });
             const allocator = solutions.allocator;
 
             // If I used an unmanaged arraylist, I could use toOwnedSlice(Allocator)
@@ -523,7 +522,7 @@ fn secondPhaseSearch(
 
     } else if (depth > 0) {
         const index = encodePhase2CoordToIndex(coord_cube) orelse unreachable;
-        const prune_depth = PruneTables.phase2[index];
+        const prune_depth = Tables.phase2[index];
 
         if (prune_depth <= depth) {
             for (g1Moves) |move| {
