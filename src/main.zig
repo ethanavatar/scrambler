@@ -7,15 +7,83 @@ const solver = @import("solver.zig");
 const Tables = @import("Tables.zig");
 const allocators = @import("allocators.zig");
 
+const clap = @import("clap");
+
+const Parameters = enum(u8) {
+    Command,
+    Scramble_Count,
+};
+
+const params = [_]clap.Param(u8){
+    .{
+        .id = @intFromEnum(Parameters.Command),
+        .takes_value = .one,
+    },
+    .{
+        .id = @intFromEnum(Parameters.Scramble_Count),
+        .names = .{ .short = 'c', .long = "count" },
+        .takes_value = .one,
+    },
+};
+
+
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
 
-    const allocator = arena.allocator();
-
     var tables = try Tables.generateAll();
     defer tables.freeAll();
 
+    const allocator = arena.allocator();
+    
+    var iter = try std.process.ArgIterator.initWithAllocator(allocator);
+    defer iter.deinit();
+
+    _ = iter.next();
+
+    var diag = clap.Diagnostic{};
+    var parser = clap.streaming.Clap(u8, std.process.ArgIterator){
+        .params = &params, .iter = &iter, .diagnostic = &diag,
+    };
+
+    while (parser.next() catch |err| {
+        try diag.reportToFile(.stderr(), err);
+        return err;
+    }) |arg| {
+        switch (@as(Parameters, @enumFromInt(arg.param.id))) {
+            Parameters.Command => {
+                const command = arg.value.?;
+                if (std.mem.eql(u8, command, "scramble")) try scrambleCommand(allocator, &parser, &diag)
+                else std.debug.print("Unknown command: {s}", .{ command });
+            },
+            else => unreachable,
+        }
+    }
+}
+
+
+fn scrambleCommand(
+    allocator: std.mem.Allocator,
+    parser: *clap.streaming.Clap(u8, std.process.ArgIterator),
+    diag: *clap.Diagnostic
+) !void {
+    while (parser.next() catch |err| {
+        try diag.reportToFile(.stderr(), err);
+        return err;
+    }) |arg| {
+        switch (@as(Parameters, @enumFromInt(arg.param.id))) {
+            Parameters.Scramble_Count => {
+                const count = try std.fmt.parseInt(u32, arg.value.?, 10);
+                for (0..count) |_| {
+                    try scrambleMain(allocator);
+                }
+            },
+            else => unreachable,
+        }
+    }
+}
+
+fn scrambleMain(allocator: std.mem.Allocator) !void {
     const scramble = try cubies.CubieCube.randomState();
     const solutions = try solver.findSolutions(scramble, 1, allocator);
     const solution = solutions.items[0];
@@ -42,34 +110,4 @@ pub fn main() !void {
     std.debug.assert(std.mem.eql(cubies.Corner, &scramble.cornerPermutations, &scrambled_cube.cornerPermutations));
     std.debug.assert(std.mem.eql(u8, &scramble.edgeOrientations, &scrambled_cube.edgeOrientations));
     std.debug.assert(std.mem.eql(u8, &scramble.cornerOrientations, &scrambled_cube.cornerOrientations));
-
-    //var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    //defer arena.deinit();
-
-    //const allocator = arena.allocator();
-
-    //var tables = try Tables.generateAll();
-    //defer tables.freeAll();
-
-    //const scramble = "B2 F2 L2 U2 B2 D2 F2 U2 L B2 D F' L' D U B' U F' L2 F'";
-
-    //std.debug.print("Scramble: {s}\n", .{ scramble });
-    //var cube = cubies.CubieCube.initFromAlgorithmString(scramble);
-    //std.debug.print("{f}\n", .{ cube });
-
-    //const solutions = try solver.findSolutions(cube, 10, allocator);
-    //std.debug.print("Generated {} Solutions.\n", .{ solutions.items.len });
-
-    //for (solutions.items, 1..) |solution, i| {
-    //    cube = cubies.CubieCube.initFromAlgorithmString(scramble);
-
-    //    std.debug.print("Solution {}: ", .{ i });
-    //    for (solution) |move| {
-    //        std.debug.print("{f} ", .{ move });
-    //        cube.turn(move);
-    //    }
-    //    std.debug.print("\n", .{ });
-
-    //    //std.debug.print("{f}\n", .{ cube });
-    //}
 }
