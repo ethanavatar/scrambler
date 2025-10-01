@@ -18,7 +18,7 @@ fn changeCorner(cube: *cubies.CubieCube, position: cubies.Corner, newPiece: cubi
 }
 
 pub const rMove: cubies.CubieCube = ret: {
-    var c = cubies.CubieCube.solved();
+    var c = cubies.CubieCube.solved;
 
     changeEdge(&c, .UR, .RF, 1);
     changeEdge(&c, .RB, .UR, 1);
@@ -34,7 +34,7 @@ pub const rMove: cubies.CubieCube = ret: {
 };
 
 pub const lMove: cubies.CubieCube = ret: {
-    var c = cubies.CubieCube.solved();
+    var c = cubies.CubieCube.solved;
 
     changeEdge(&c, .UL, .LB, 1);
     changeEdge(&c, .LF, .UL, 1);
@@ -50,7 +50,7 @@ pub const lMove: cubies.CubieCube = ret: {
 };
 
 pub const uMove: cubies.CubieCube = ret: {
-    var c = cubies.CubieCube.solved();
+    var c = cubies.CubieCube.solved;
 
     changeEdge(&c, .UB, .UL, 0);
     changeEdge(&c, .UR, .UB, 0);
@@ -66,7 +66,7 @@ pub const uMove: cubies.CubieCube = ret: {
 };
 
 pub const dMove: cubies.CubieCube = ret: {
-    var c = cubies.CubieCube.solved();
+    var c = cubies.CubieCube.solved;
 
     changeEdge(&c, .DF, .DL, 0);
     changeEdge(&c, .DR, .DF, 0);
@@ -82,7 +82,7 @@ pub const dMove: cubies.CubieCube = ret: {
 };
 
 pub const fMove: cubies.CubieCube = ret: {
-    var c = cubies.CubieCube.solved();
+    var c = cubies.CubieCube.solved;
 
     changeEdge(&c, .UF, .LF, 0);
     changeEdge(&c, .RF, .UF, 0);
@@ -98,7 +98,7 @@ pub const fMove: cubies.CubieCube = ret: {
 };
 
 pub const bMove: cubies.CubieCube = ret: {
-    var c = cubies.CubieCube.solved();
+    var c = cubies.CubieCube.solved;
 
     changeEdge(&c, .UB, .RB, 0);
     changeEdge(&c, .LB, .UB, 0);

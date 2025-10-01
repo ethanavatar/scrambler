@@ -1,6 +1,6 @@
 const std = @import("std");
 
-fn factorial(n: u64) u64 {
+pub fn factorial(n: u64) u64 {
     var result: u64 = 1;
 
     for (1..n + 1) |i| {
@@ -20,18 +20,17 @@ test {
 }
 
 pub fn lexicographicRank(permutation: []const u8) u64 {
-    const n = permutation.len;
     var rank: u64 = 0;
 
-    for (0..n) |i| {
+    for (0..permutation.len) |i| {
         var smaller_count: u64 = 0;
-        for ((i + 1)..n) |j| {
+        for ((i + 1)..permutation.len) |j| {
             if (permutation[j] < permutation[i]) {
                 smaller_count += 1;
             }
         }
 
-        rank += smaller_count * factorial(n - i - 1);
+        rank += smaller_count * factorial(permutation.len - i - 1);
     }
 
     return rank;

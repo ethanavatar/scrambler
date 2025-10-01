@@ -2,6 +2,8 @@ const std = @import("std");
 const utilities = @import("utilities.zig");
 const facelets  = @import("facelets.zig");
 const permutations = @import("permutations.zig");
+const math = @import("math.zig");
+const solver = @import("solver.zig");
 
 pub const CubeMove = struct {
     face:  permutations.CubeFace,
@@ -56,18 +58,74 @@ pub const CubieCube = struct {
     edgeOrientations:   [12]u8,
     cornerOrientations: [8]u8,
 
-    pub fn solved() CubieCube {
-        return .{
-            .edgePermutations   = utilities.initAcending([12]Edge),
-            .cornerPermutations = utilities.initAcending([8]Corner),
+    pub const solved: CubieCube = .{
+        .edgePermutations   = utilities.initAcending([12]Edge),
+        .cornerPermutations = utilities.initAcending([8]Corner),
 
-            .edgeOrientations   = @splat(0),
-            .cornerOrientations = @splat(0),
-        };
+        .edgeOrientations   = @splat(0),
+        .cornerOrientations = @splat(0),
+    };
+
+    fn parity(perm: []const u8) u64 {
+        var inversions: u64 = 0;
+        for (0..perm.len) |i| {
+            for ((i + 1)..perm.len) |j| {
+                if (perm[i] > perm[j]) {
+                    inversions += 1;
+                }
+            }
+        }
+        return inversions % 2;
+    }
+
+    pub fn randomState() !CubieCube {
+        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+
+        var cube = CubieCube.solved;
+
+        const rand = std.crypto.random;
+        {
+            const edge_pieces:   []const u8 = @ptrCast(&solved.edgePermutations);
+            const corner_pieces: []const u8 = @ptrCast(&solved.cornerPermutations);
+
+            const edge_rank = rand.intRangeAtMost(u64, 0, math.factorial(12));
+            const edge_perm = try math.lexicographicUnrank(edge_pieces, edge_rank, allocator);
+
+            for (edge_perm.items, 0..) |piece, i|
+                cube.edgePermutations[i] = @enumFromInt(piece);
+
+            const corner_rank = rand.intRangeAtMost(u64, 0, math.factorial(8));
+            const corner_perm = try math.lexicographicUnrank(corner_pieces, corner_rank, allocator);
+
+            for (corner_perm.items, 0..) |piece, i|
+                cube.cornerPermutations[i] = @enumFromInt(piece);
+
+            if (parity(corner_perm.items) != parity(edge_perm.items)) {
+                const a = cube.edgePermutations[0];
+                const b = cube.edgePermutations[1];
+
+                cube.edgePermutations[0] = b;
+                cube.edgePermutations[1] = a;
+            }
+        }
+
+        {
+            const edge_rank = rand.intRangeAtMost(u16, 0, 2048);
+            const decoded_edges = try solver.decodeEdgeOrientation(edge_rank, allocator);
+            cube.edgeOrientations = decoded_edges.edgeOrientations;
+
+            const corner_rank = rand.intRangeAtMost(u16, 0, 2187);
+            const decoded_corners = try solver.decodeCornerOrientation(corner_rank, allocator);
+            cube.cornerOrientations = decoded_corners.cornerOrientations;
+        }
+
+        return cube;
     }
 
     pub fn initFromAlgorithmString(algorithm: []const u8) CubieCube {
-        var cube = CubieCube.solved();
+        var cube = CubieCube.solved;
         cube.algorithmString(algorithm);
         return cube;
     }
@@ -112,7 +170,7 @@ pub const CubieCube = struct {
 
     pub fn turn(self: *CubieCube, cubeTurn: CubeMove) void {
         for (0..cubeTurn.order) |_| {
-            var newState: CubieCube = CubieCube.solved();
+            var newState: CubieCube = CubieCube.solved;
             const permutation = switch (cubeTurn.face) {
                 .Right => permutations.rMove, .Left  => permutations.lMove,
                 .Up    => permutations.uMove, .Down  => permutations.dMove,

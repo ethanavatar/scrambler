@@ -59,7 +59,7 @@ pub fn decodeEdgeOrientation(coord: u16, _: std.mem.Allocator) !cubies.CubieCube
 
     results[11] = @intCast((2 - (sum % 2)) % 2);
 
-    var cube = cubies.CubieCube.solved();
+    var cube = cubies.CubieCube.solved;
     cube.edgeOrientations = results;
 
     return cube;
@@ -103,7 +103,7 @@ pub fn decodeCornerOrientation(twist: u16, _: std.mem.Allocator) !cubies.CubieCu
 
     results[7] = @intCast((3 - (sum % 3)) % 3);
 
-    var cube = cubies.CubieCube.solved();
+    var cube = cubies.CubieCube.solved;
     cube.cornerOrientations = results;
 
     return cube;
@@ -145,9 +145,7 @@ pub const CoordinateCube = struct {
     cornerPermutation: u16 = 0,
     slicePermutation:  u16 = 0,
 
-    pub fn solved() CoordinateCube {
-        return CoordinateCube.fromCubies(cubies.CubieCube.solved());
-    }
+    pub const solved = CoordinateCube.fromCubies(cubies.CubieCube.solved);
 
     pub fn fromCubies(cubie_cube: cubies.CubieCube) CoordinateCube {
         return .{
@@ -170,17 +168,15 @@ pub const CoordinateCube = struct {
     }
 
     pub fn isG1(self: *const CoordinateCube) bool {
-        const solved_cube = CoordinateCube.solved();
-        return self.edgeOrientation == solved_cube.edgeOrientation
-            and self.cornerOrientation == solved_cube.cornerOrientation
-            and self.slicePermutation == solved_cube.slicePermutation;
+        return self.edgeOrientation == solved.edgeOrientation
+            and self.cornerOrientation == solved.cornerOrientation
+            and self.slicePermutation == solved.slicePermutation;
     }
 
     pub fn isSolved(self: *const CoordinateCube) bool {
-        const solved_cube = CoordinateCube.solved();
         return self.isG1()
-            and self.edgePermutation == solved_cube.edgePermutation
-            and self.cornerPermutation == solved_cube.cornerPermutation;
+            and self.edgePermutation == solved.edgePermutation
+            and self.cornerPermutation == solved.cornerPermutation;
     }
 };
 
@@ -271,7 +267,7 @@ pub fn decodeSlicePermutation(rank: u16, allocator: std.mem.Allocator) !cubies.C
 
     std.mem.sort(u8, combo.items, {}, comptime std.sort.asc(u8));
 
-    var cube = cubies.CubieCube.solved();
+    var cube = cubies.CubieCube.solved;
 
     for (combo.items, [_]cubies.Edge{ .LF, .LB, .RF, .RB, }) |destination, source| {
         permutations.changeEdge(&cube, @enumFromInt(destination), source, 0);
@@ -339,7 +335,7 @@ pub fn decodeCornerPermutation(rank: u16, allocator: std.mem.Allocator) !cubies.
     }
 
     const perm = try math.lexicographicUnrank(&elements, rank, allocator);
-    var cube = cubies.CubieCube.solved();
+    var cube = cubies.CubieCube.solved;
 
     for (perm.items, 0..) |cubie, i| {
         cube.cornerPermutations[i] = @enumFromInt(cubie);
@@ -382,7 +378,7 @@ pub fn decodeEdgePermutation(rank: u16, allocator: std.mem.Allocator) !cubies.Cu
 
     const perm = try math.lexicographicUnrank(&elements, rank, allocator);
 
-    var cube = cubies.CubieCube.solved();
+    var cube = cubies.CubieCube.solved;
     for (slots, 0..8) |slot, i| {
         cube.edgePermutations[@intFromEnum(slot)] = @enumFromInt(perm.items[i]);
     }
@@ -391,7 +387,7 @@ pub fn decodeEdgePermutation(rank: u16, allocator: std.mem.Allocator) !cubies.Cu
 }
 
 fn isSolved(cube: cubies.CubieCube) bool {
-    const reference = cubies.CubieCube.solved();
+    const reference = cubies.CubieCube.solved;
     var not_solved = false;
     for (cube.edgePermutations,   reference.edgePermutations)   |l, r| not_solved = not_solved or (l != r);
     for (cube.cornerPermutations, reference.cornerPermutations) |l, r| not_solved = not_solved or (l != r);
@@ -401,29 +397,34 @@ fn isSolved(cube: cubies.CubieCube) bool {
 }
 
 test {
-    const solved = cubies.CubieCube.solved(); 
+    const solved = cubies.CubieCube.solved; 
     try std.testing.expectEqual(true, isSolved(solved));
 
     const not_solved = cubies.CubieCube.initFromAlgorithmString(algorithms.mitch); 
     try std.testing.expectEqual(false, isSolved(not_solved));
 }
 
-const max_depth: usize = 99;
+const Solution = struct {
+    moves: []cubies.CubeMove,
+    phase1_end: usize,
 
+
+};
+
+const max_depth: usize = 99;
 var max_solutions: usize = 0;
 
 pub fn findSolutions(
     c: cubies.CubieCube, solutions_count: usize,
     allocator: std.mem.Allocator,
-) !std.array_list.Managed([]cubies.CubeMove) {
+) !std.array_list.Managed(Solution) {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
     
     max_solutions = solutions_count;
 
     var cube = c;
-
-    var solutions = std.array_list.Managed([]cubies.CubeMove).init(allocator);
+    var solutions = std.array_list.Managed(Solution).init(allocator);
 
     const start_time = std.time.timestamp();
 
@@ -443,7 +444,7 @@ pub fn findSolutions(
 
 fn firstPhaseSearch(
     cube: *cubies.CubieCube, depth: usize, moves: *std.array_list.Managed(cubies.CubeMove),
-    solutions: *std.array_list.Managed([]cubies.CubeMove),
+    solutions: *std.array_list.Managed(Solution),
     start_time: i64
 ) !void {
     const coord_cube = CoordinateCube.fromCubies(cube.*);
@@ -462,7 +463,7 @@ fn firstPhaseSearch(
                 const g1_time = std.time.timestamp();
                 //std.debug.print("G1 ({} seconds since start)\n", .{ g1_time - start_time });
 
-                try secondPhaseStart(cube, depth, moves, solutions, g1_time);
+                try secondPhaseStart(cube, depth, moves, solutions, g1_time, moves.items.len);
             }
         }
 
@@ -490,11 +491,11 @@ fn firstPhaseSearch(
 
 fn secondPhaseStart(
     cube: *cubies.CubieCube, current_depth: usize, moves: *std.array_list.Managed(cubies.CubeMove),
-    solutions: *std.array_list.Managed([]cubies.CubeMove),
-    g1_time: i64
+    solutions: *std.array_list.Managed(Solution),
+    g1_time: i64, phase1_end: usize
 ) !void {
     for (0..max_depth - current_depth) |depth| {
-        secondPhaseSearch(cube, depth, moves, solutions, g1_time);
+        secondPhaseSearch(cube, depth, moves, solutions, g1_time, phase1_end);
         if (solutions.items.len >= max_solutions) {
             break;
         }
@@ -503,21 +504,20 @@ fn secondPhaseStart(
 
 fn secondPhaseSearch(
     cube: *cubies.CubieCube, depth: usize, moves: *std.array_list.Managed(cubies.CubeMove),
-    solutions: *std.array_list.Managed([]cubies.CubeMove),
-    g1_time: i64
+    solutions: *std.array_list.Managed(Solution),
+    g1_time: i64, phase1_end: usize
 ) void {
     const coord_cube = CoordinateCube.fromCubies(cube.*);
 
     if (depth == 0) {
         if (isSolved(cube.*)) {
             //std.debug.print("G2 ({} seconds since G1)\n", .{ std.time.timestamp() - g1_time });
-            const allocator = solutions.allocator;
 
             // If I used an unmanaged arraylist, I could use toOwnedSlice(Allocator)
-            const solution = allocator.alloc(cubies.CubeMove, moves.items.len) catch unreachable;
+            const solution = solutions.allocator.alloc(cubies.CubeMove, moves.items.len) catch unreachable;
             std.mem.copyForwards(cubies.CubeMove, solution, moves.items);
 
-            solutions.append(solution) catch unreachable;
+            solutions.append(.{ .moves = solution, .phase1_end = phase1_end }) catch unreachable;
         }
 
     } else if (depth > 0) {
@@ -533,7 +533,7 @@ fn secondPhaseSearch(
                 cube.turn(move);
                 defer cube.turn(move.inverse());
 
-                secondPhaseSearch(cube, depth - 1, moves, solutions, g1_time);
+                secondPhaseSearch(cube, depth - 1, moves, solutions, g1_time, phase1_end);
 
                 if (solutions.items.len >= max_solutions) {
                     break;

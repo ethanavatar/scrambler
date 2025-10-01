@@ -27,7 +27,7 @@ fn generatePruneTable(
     if (magic.* == expected_magic) return;
     @memset(table, -1);
 
-    const solved_index = encode_function(solver.CoordinateCube.solved()) orelse unreachable;
+    const solved_index = encode_function(solver.CoordinateCube.solved) orelse unreachable;
     table[solved_index] = 0;
 
     var depth:  usize = 0;
