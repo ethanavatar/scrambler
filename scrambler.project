@@ -1,5 +1,6 @@
 // raddbg 0.9.21 project file
 
+recent_file: path: "../sea_of_nodes/sea_of_nodes.radbg_project"
 recent_file: path: "src/solver.zig"
 recent_file: path: "src/Tables.zig"
 recent_file: path: "../../AppData/Local/Microsoft/WinGet/Packages/zig.zig_Microsoft.Winget.Source_8wekyb3d8bbwe/zig-windows-x86_64-0.14.0/lib/std/posix.zig"

@@ -167,6 +167,29 @@ pub const CoordinateCube = struct {
         };
     }
 
+    pub fn applySymmetry(self: *const CoordinateCube, symmetry: cubies.CubieCube) !CoordinateCube {
+        var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+        defer arena.deinit();
+        const allocator = arena.allocator();
+
+        var cube: cubies.CubieCube = .{
+            .edgeOrientations = (try decodeEdgeOrientation(self.edgeOrientation, allocator)).edgeOrientations,
+            .edgePermutations = (try decodeEdgePermutation(self.edgePermutation, allocator)).edgePermutations,
+            .cornerOrientations = (try decodeCornerOrientation(self.cornerOrientation, allocator)).cornerOrientations,
+            .cornerPermutations = (try decodeCornerPermutation(self.cornerPermutation, allocator)).cornerPermutations,
+        };
+
+        const slicePermutation = (try decodeSlicePermutation(self.slicePermutation, allocator)).edgePermutations;
+
+        for ([_]cubies.Edge{ .LF, .LB, .RF, .RB, }) |slice_edge| {
+            const i = @intFromEnum(slice_edge);
+            cube.edgePermutations[i] = slicePermutation[i];
+        }
+
+        cube.permute(symmetry);
+        return CoordinateCube.fromCubies(cube);
+    }
+
     pub fn isG1(self: *const CoordinateCube) bool {
         return self.edgeOrientation == solved.edgeOrientation
             and self.cornerOrientation == solved.cornerOrientation

@@ -4,6 +4,8 @@ const permutations = @import("permutations.zig");
 const cubies = @import("cubies.zig");
 const solver = @import("solver.zig");
 
+const symmetry = @import("Symmetry.zig");
+
 const Tables = @import("Tables.zig");
 const allocators = @import("allocators.zig");
 
@@ -53,8 +55,15 @@ pub fn main() !void {
         switch (@as(Parameters, @enumFromInt(arg.param.id))) {
             Parameters.Command => {
                 const command = arg.value.?;
-                if (std.mem.eql(u8, command, "scramble")) try scrambleCommand(allocator, &parser, &diag)
-                else std.debug.print("Unknown command: {s}", .{ command });
+                if (std.mem.eql(u8, command, "scramble")) {
+                    try scrambleCommand(allocator, &parser, &diag);
+
+                } if (std.mem.eql(u8, command, "test")) {
+                    std.debug.print("{f}\n", .{ symmetry.LR2 });
+
+                } else {
+                    std.debug.print("Unknown command: {s}", .{ command });
+                }
             },
             else => unreachable,
         }

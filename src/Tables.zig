@@ -2,13 +2,14 @@ const std = @import("std");
 const solver = @import("solver.zig");
 const cubies = @import("cubies.zig");
 const allocators = @import("allocators.zig");
+const Symmetry = @import("Symmetry.zig");
 
 var file_allocator: allocators.FileAllocator = undefined;
 
 const Self = @This();
 
-phase1: struct { magic: u32, table: [4478976]i8, },
-phase2: struct { magic: u32, table: [812851200]i8, },
+phase1: struct { magic: u32, table: [108039]i8, reps: []usize, reps_map: std.AutoArrayHashMap(usize, usize) },
+phase2: struct { magic: u32, table: [812851200]i8, reps: []usize, reps_map: std.AutoArrayHashMap(usize, usize) },
 
 edgeOrientation:   struct { magic: u32, table: [2048][solver.allMoves.len]u16, },
 edgePermutation:   struct { magic: u32, table: [40320][solver.allMoves.len]u16, },
@@ -18,14 +19,58 @@ slicePermutation:  struct { magic: u32, table: [495][solver.allMoves.len]u16, },
 
 pub var tables: *Self = undefined;
 
+pub var phase1_reps: []usize = undefined;
+pub var phase1_reps_map: std.AutoArrayHashMap(usize, usize) = undefined;
+
 fn generatePruneTable(
     expected_magic: u32,
-    magic: *u32, table: []i8,
+    total_states: usize,
+    magic: *u32, table: []i8, reps: *[]usize, reps_map: *std.AutoArrayHashMap(usize, usize),
     encode_function: *const fn (cube: solver.CoordinateCube) ?usize,
     decode_function: *const fn (index: usize) ?solver.CoordinateCube,
 ) !void {
     if (magic.* == expected_magic) return;
     @memset(table, -1);
+
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    reps.* = try allocator.alloc(usize, total_states);
+    reps_map.* = std.AutoArrayHashMap(usize, usize).init(allocator);
+
+    for (0..total_states) |i| {
+        const coordinate = decode_function(i) orelse unreachable;
+
+        var best_index = total_states;
+        var best_class: usize = 48;
+
+        for (0..48) |class| {
+            const symmetric_coordinate = coordinate.applySymmetry(Symmetry.symmetries[class]) catch unreachable;
+            const index = encode_function(symmetric_coordinate) orelse unreachable;
+
+            if (index < best_index or (index == best_index and class < best_class)) {
+                best_index = index;
+                best_class = class;
+            }
+        }
+
+        reps.*[i] = best_index;
+        if (!reps_map.contains(best_index)) {
+            try reps_map.put(best_index, reps_map.count());
+        }
+
+        if (i % 10000 == 0) {
+            std.debug.print("symmetries = {}/{} ({d:.4}%)\r", .{
+                i,
+                total_states,
+                (@as(f32, @floatFromInt(i)) / @as(f32, @floatFromInt(total_states))) * 100,
+            });
+        }
+    }
+
+    std.debug.print("symmetries = {}/{} (100%)\n", .{ total_states, total_states });
+    std.debug.print("reps_map: {}\n", .{ reps_map.count() });
 
     const solved_index = encode_function(solver.CoordinateCube.solved) orelse unreachable;
     table[solved_index] = 0;
@@ -33,28 +78,33 @@ fn generatePruneTable(
     var depth:  usize = 0;
     var filled: usize = 1;
 
-    while (filled < table.len): (depth += 1) {
+    while (filled < reps_map.count()): (depth += 1) {
         std.debug.print("depth = {}, filled = {}\r", .{ depth, filled });
-        for (0..table.len) |i| {
+        for (0..total_states) |i| {
 
-            const v = table[i];
+            const rep = reps.*[i];
+            const v = table[reps_map.get(rep) orelse unreachable];
+
             if (v != depth) continue;
 
-            const coordinate = decode_function(i) orelse unreachable;
+            const coordinate = decode_function(rep) orelse unreachable;
         
             for (solver.allMoves, 0..) |_, move_index| {
                 const next_coordinate = coordinate.move(move_index); 
 
                 if (encode_function(next_coordinate)) |next_index| {
-                    if (table[next_index] == -1) {
-                        table[next_index] = @intCast(depth + 1);
+                    const next_rep = reps.*[next_index];
+                    const rep_index = reps_map.get(next_rep) orelse unreachable;
+
+                    if (table[rep_index] == -1) {
+                        table[rep_index] = @intCast(depth + 1);
                         filled += 1;
                     }
                 }
 
             }
-
         }
+        std.debug.print("depth = {}, filled = {}\r", .{ depth, filled });
     }
 
     std.debug.print("\n", .{ });
@@ -88,11 +138,14 @@ fn generateMoveTable(
 }
 
 pub fn generateAll() !*Self {
+    Symmetry.generate();
+
     const cwd = std.fs.cwd();
     const tables_directory = try cwd.makeOpenPath("tables", .{ .access_sub_paths = true });
 
     file_allocator = allocators.FileAllocator{ .dir = tables_directory, .file_name = "tables.bin" };
-    var self = try allocators.createUntouched(file_allocator.allocator(), Self);
+    const allocator = file_allocator.allocator();
+    var self = try allocators.createUntouched(allocator, Self);
     tables = self;
 
     try generateMoveTable(
@@ -125,19 +178,23 @@ pub fn generateAll() !*Self {
         solver.encodeSlicePermutation, solver.decodeSlicePermutation,
     );
 
-    try generatePruneTable(
-        std.mem.bytesToValue(u32, "P1PT"),
-        &self.phase1.magic, &self.phase1.table,
-        solver.encodeCoordinateToTableIndex, solver.decodeTableIndexToCoordinate,
-    );
+    //try generatePruneTable(
+    //    std.mem.bytesToValue(u32, "P1PT"),
+    //    4478976,
+    //    &self.phase1.magic, &self.phase1.table, &self.phase1.reps, &self.phase1.reps_map,
+    //    solver.encodeCoordinateToTableIndex, solver.decodeTableIndexToCoordinate,
+    //);
 
     try generatePruneTable(
         std.mem.bytesToValue(u32, "P2PT"),
-        &self.phase2.magic, &self.phase2.table,
+        812851200,
+        &self.phase2.magic, &self.phase2.table, &self.phase2.reps, &self.phase2.reps_map,
         solver.encodePhase2CoordToIndex, solver.decodePhase2IndexToCoord,
     );
 
-    return self;
+    @panic("");
+
+    //return self;
 }
 
 pub fn freeAll(self: *Self) void {

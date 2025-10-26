@@ -170,30 +170,34 @@ pub const CubieCube = struct {
 
     pub fn turn(self: *CubieCube, cubeTurn: CubeMove) void {
         for (0..cubeTurn.order) |_| {
-            var newState: CubieCube = CubieCube.solved;
             const permutation = switch (cubeTurn.face) {
                 .Right => permutations.rMove, .Left  => permutations.lMove,
                 .Up    => permutations.uMove, .Down  => permutations.dMove,
                 .Front => permutations.fMove, .Back  => permutations.bMove,
             };
 
-            for (0..12) |i| {
-                const perm = @intFromEnum(permutation.edgePermutations[i]);
-                newState.edgePermutations[i] = self.edgePermutations[perm];
-                newState.edgeOrientations[i] = (self.edgeOrientations[perm] + permutation.edgeOrientations[i]) % 2;
-            }
-
-            for (0..8) |i| {
-                const perm = @intFromEnum(permutation.cornerPermutations[i]);
-                newState.cornerPermutations[i] = self.cornerPermutations[@intFromEnum(permutation.cornerPermutations[i])];
-                newState.cornerOrientations[i] = (self.cornerOrientations[perm] + permutation.cornerOrientations[i]) % 3;
-            }
-
-            self.edgePermutations   = newState.edgePermutations;
-            self.edgeOrientations   = newState.edgeOrientations;
-            self.cornerPermutations = newState.cornerPermutations;
-            self.cornerOrientations = newState.cornerOrientations;
+            self.permute(permutation);
         }
+    }
+
+    pub fn permute(self: *CubieCube, permutation: CubieCube) void {
+        var newState: CubieCube = CubieCube.solved;
+        for (0..12) |i| {
+            const perm = @intFromEnum(permutation.edgePermutations[i]);
+            newState.edgePermutations[i] = self.edgePermutations[perm];
+            newState.edgeOrientations[i] = (self.edgeOrientations[perm] + permutation.edgeOrientations[i]) % 2;
+        }
+
+        for (0..8) |i| {
+            const perm = @intFromEnum(permutation.cornerPermutations[i]);
+            newState.cornerPermutations[i] = self.cornerPermutations[@intFromEnum(permutation.cornerPermutations[i])];
+            newState.cornerOrientations[i] = (self.cornerOrientations[perm] + permutation.cornerOrientations[i]) % 3;
+        }
+
+        self.edgePermutations   = newState.edgePermutations;
+        self.edgeOrientations   = newState.edgeOrientations;
+        self.cornerPermutations = newState.cornerPermutations;
+        self.cornerOrientations = newState.cornerOrientations;
     }
 
     pub fn format(
